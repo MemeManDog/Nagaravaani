@@ -183,3 +183,99 @@ export interface LeaderboardUser {
   badge: string;
   joinedDate: string;
 }
+
+// -------------------------------------------------------------
+// VOICE HELPLINE (Exotel 04041895372)
+// -------------------------------------------------------------
+export type CallStatus =
+  | 'RINGING'
+  | 'CONNECTED'
+  | 'IVR_LANGUAGE_SELECTION'
+  | 'TRANSCRIBING'
+  | 'AI_TRIAGING'
+  | 'COMPLAINT_GENERATED'
+  | 'COMPLETED'
+  | 'FAILED';
+
+export interface VoicePipelineStep {
+  stepName: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  details: string;
+  timestamp?: string;
+}
+
+export interface VoiceCallSession {
+  callSid: string;
+  exotelNumber: string; // '04041895372'
+  callerNumberMasked: string; // e.g. '+91 98*** **412'
+  startedAt: string;
+  durationSeconds: number;
+  status: CallStatus;
+  selectedLanguage: Language;
+  languageInputMethod: 'DTMF_1_EN' | 'DTMF_2_HI' | 'DTMF_3_TE' | 'VOICE_PROMPT';
+  liveTranscript: string;
+  analysis?: AgentAnalysisResponse;
+  generatedComplaint?: string;
+  ticketNumber?: string;
+  reportId?: string;
+  streamIntegrationStatus: 'STREAM_PENDING_EXOTEL_CONFIG' | 'STREAM_ACTIVE';
+  pipelineSteps: VoicePipelineStep[];
+}
+
+// -------------------------------------------------------------
+// COMMUNITY ESCALATION & SOCIAL AMPLIFICATION
+// -------------------------------------------------------------
+export interface SocialPostDraft {
+  xPost: string;
+  instagramCaption: string;
+  disclaimer: string;
+  suggestedHashtags: string[];
+}
+
+export interface CommunityEscalationCluster {
+  communityIssueId: string;
+  category: IssueCategory;
+  approximateLocation: string;
+  ward: string;
+  city: string;
+  reportIds: string[];
+  distinctReporters: string[];
+  distinctReporterCount: number;
+  totalReportCount: number;
+  firstReportedAt: string;
+  lastReportedAt: string;
+  daysActive: number;
+  aiSeverity: SeverityLevel;
+  severityReasons: string[];
+  officialStatus: ReportLifecycleStatus;
+  escalationStatus: 'MONITORING' | 'ESCALATED' | 'SOCIAL_AMPLIFIED';
+  amplifiedPlatforms: ('X' | 'INSTAGRAM')[];
+  socialPostDraft?: SocialPostDraft;
+  lastAmplifiedAt?: string;
+  isPersistent: boolean; // >= 7 days active, >= 2 distinct users, not resolved
+}
+
+// -------------------------------------------------------------
+// REFERRAL SYSTEM (20 Points on 1st genuine report)
+// -------------------------------------------------------------
+export interface ReferralRecord {
+  id: string;
+  referrerName: string;
+  referralCode: string;
+  refereeName: string;
+  status: 'pending' | 'first_report_completed' | 'rewarded';
+  firstReportTicketNumber?: string;
+  createdAt: string;
+  rewardedAt?: string;
+  pointsAwarded: number;
+}
+
+export interface ReferralStats {
+  userReferralCode: string;
+  referralLink: string;
+  totalReferrals: number;
+  pendingCount: number;
+  completedCount: number;
+  totalBonusPointsEarned: number;
+  records: ReferralRecord[];
+}

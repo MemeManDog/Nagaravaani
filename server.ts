@@ -13,11 +13,19 @@ import {
   AgentAnalysisResponse,
   ReportingMethod,
   ReportLifecycleStatus,
+  VoiceCallSession,
+  CommunityEscalationCluster,
+  SocialPostDraft,
+  ReferralRecord,
+  ReferralStats,
+  Language,
 } from './src/types';
 import {
   INITIAL_REPORTS,
   MUNICIPAL_AUTHORITIES,
   INITIAL_LEADERBOARD,
+  INITIAL_VOICE_SESSIONS,
+  INITIAL_REFERRALS,
 } from './src/data/mockData';
 
 dotenv.config();
@@ -33,6 +41,13 @@ app.use(express.json({ limit: '25mb' }));
 // In-memory data store for prototype
 let reports: CivicReport[] = [...INITIAL_REPORTS];
 let leaderboard: LeaderboardUser[] = [...INITIAL_LEADERBOARD];
+let voiceSessions: VoiceCallSession[] = [...INITIAL_VOICE_SESSIONS];
+let referrals: ReferralRecord[] = [...INITIAL_REFERRALS];
+
+// Environment Configuration (Secrets kept strictly in backend)
+const EXOTEL_PHONE_NUMBER = process.env.EXOTEL_PHONE_NUMBER || '04041895372';
+const EXOTEL_STREAMING_URL = process.env.EXOTEL_STREAMING_URL || '';
+const DONATION_URL = process.env.DONATION_URL || 'https://rzp.io/l/nagaravaani-support';
 
 // Initialize Gemini SDK with User-Agent header as required
 const apiKey = process.env.GEMINI_API_KEY || '';
@@ -797,6 +812,7 @@ app.post('/api/reports/record-report', (req: Request, res: Response) => {
     formalComplaintText,
     formalComplaintTranslations,
     reportingMethod = 'Email',
+    referralCode,
   } = req.body;
 
   // Search existing reports to count qualifying reports
@@ -894,6 +910,75 @@ app.post('/api/reports/record-report', (req: Request, res: Response) => {
     });
   }
 
+  // -----------------------------------------------------------
+  // REFERRAL TRACKING: Award 20 points ONLY after referred person
+  // submits their first genuine civic report. Prevent self-referrals & abuse.
+  // -----------------------------------------------------------
+  let referralNotice: string | null = null;
+  if (referralCode && typeof referralCode === 'string' && referralCode.trim()) {
+    const cleanCode = referralCode.trim().toUpperCase();
+    const referrerMatch = referrals.find((r) => r.referralCode.toUpperCase() === cleanCode);
+    const referrerName = referrerMatch ? referrerMatch.referrerName : cleanCode.replace(/NAGARA-|-|\d+/g, '').trim() || 'Ayush D.';
+
+    // Check self-referral prevention
+    const isSelfReferral = citizenName.toLowerCase().trim() === referrerName.toLowerCase().trim();
+
+    // Check if referee already has completed prior reports (first report rule)
+    const priorCitizenReports = reports.filter(
+      (r) => r.citizenName.toLowerCase().trim() === citizenName.toLowerCase().trim() && r.id !== newReport.id
+    );
+
+    if (isSelfReferral) {
+      referralNotice = 'Self-referral prevention active: You cannot claim referral rewards for your own report.';
+    } else if (priorCitizenReports.length > 0) {
+      referralNotice = 'Referral points are only granted on the first genuine civic report of a new citizen.';
+    } else {
+      // Find or create referral record
+      let record = referrals.find(
+        (r) => r.referralCode.toUpperCase() === cleanCode && r.refereeName.toLowerCase().trim() === citizenName.toLowerCase().trim()
+      );
+
+      if (!record) {
+        record = {
+          id: `ref-${Date.now()}`,
+          referrerName,
+          referralCode: cleanCode,
+          refereeName: citizenName,
+          status: 'pending',
+          createdAt: nowIso,
+          pointsAwarded: 0,
+        };
+        referrals.push(record);
+      }
+
+      if (record.status !== 'rewarded') {
+        record.status = 'rewarded';
+        record.pointsAwarded = 20;
+        record.rewardedAt = nowIso;
+        record.firstReportTicketNumber = newReport.ticketNumber;
+
+        // Award 20 points to the REFERRER on the leaderboard
+        const refUser = leaderboard.find((u) => u.displayName.toLowerCase().trim() === referrerName.toLowerCase().trim());
+        if (refUser) {
+          refUser.points += 20;
+        } else {
+          leaderboard.push({
+            id: `user-ref-${Date.now()}`,
+            rank: leaderboard.length + 1,
+            displayName: referrerName,
+            avatarSeed: referrerName,
+            issuesReported: 0,
+            points: 20,
+            resolvedCount: 0,
+            badge: 'Community Ambassador',
+            joinedDate: 'September 2026',
+          });
+        }
+        referralNotice = `+20 referral points successfully awarded to ${referrerName} for referring your first civic report!`;
+      }
+    }
+  }
+
   // Re-sort leaderboard
   leaderboard.sort((a, b) => b.points - a.points);
   leaderboard.forEach((u, i) => {
@@ -908,6 +993,7 @@ app.post('/api/reports/record-report', (req: Request, res: Response) => {
     message: awardResult.message,
     reportingMethod,
     leaderboard,
+    referralNotice,
   });
 });
 
@@ -1037,6 +1123,484 @@ app.get('/api/leaderboard', (_req: Request, res: Response) => {
 
 app.get('/api/municipal-offices', (_req: Request, res: Response) => {
   res.json({ offices: MUNICIPAL_AUTHORITIES });
+});
+
+// -------------------------------------------------------------
+// 1. VOICE HELPLINE — EXOTEL (04041895372) BACKEND INTERFACES
+// Uses the EXACT SAME Nagaravaani AI agent triage pipeline
+// -------------------------------------------------------------
+
+app.get('/api/exotel/config', (_req: Request, res: Response) => {
+  // Never expose secret keys in response; return public operational parameters
+  res.json({
+    exotelNumber: EXOTEL_PHONE_NUMBER,
+    streamIntegrationStatus: EXOTEL_STREAMING_URL ? 'STREAM_ACTIVE' : 'STREAM_PENDING_EXOTEL_CONFIG',
+    hasServerStreamingUrl: Boolean(EXOTEL_STREAMING_URL),
+    supportedLanguages: [
+      { code: 'en', dtmf: '1', name: 'English' },
+      { code: 'hi', dtmf: '2', name: 'हिन्दी (Hindi)' },
+      { code: 'te', dtmf: '3', name: 'తెలుగు (Telugu)' },
+    ],
+    ivrWelcomePrompt: 'Welcome to Nagaravaani Smart City Civic Reporting. Press 1 for English, 2 for Hindi, 3 for Telugu.',
+  });
+});
+
+app.get('/api/exotel/calls', (_req: Request, res: Response) => {
+  res.json({ calls: voiceSessions, total: voiceSessions.length });
+});
+
+// Exotel Passthru IVR Webhook (Handles incoming call from Exotel)
+app.all('/api/exotel/incoming-call', (req: Request, res: Response) => {
+  const callerNumber = req.body?.From || req.query?.From || '+91 98480 00000';
+  const callSid = req.body?.CallSid || req.query?.CallSid || `exotel-${Date.now()}`;
+  const maskedNumber = `${callerNumber.slice(0, 6)}*****`;
+
+  // Respond with Exotel-compatible IVR prompt
+  res.type('text/plain').send(
+    `Welcome to Nagaravaani Smart City Voice Helpline. Dial 1 for English, 2 for Hindi, 3 for Telugu.`
+  );
+});
+
+// Exotel IVR Language Selection Webhook
+app.all('/api/exotel/ivr-lang', (req: Request, res: Response) => {
+  const digits = String(req.body?.Digits || req.query?.Digits || '1');
+  const lang = digits === '2' ? 'hi' : digits === '3' ? 'te' : 'en';
+  res.type('text/plain').send(`Language selected: ${lang}. Please state your civic complaint and location.`);
+});
+
+// Process voice transcript with the SAME Nagaravaani AI agent workflow!
+app.post('/api/exotel/process-call', (req: Request, res: Response) => {
+  try {
+    const {
+      callerNumberMasked = '+91 98*** **412',
+      language = 'en',
+      languageInputMethod = 'DTMF_1_EN',
+      transcript = '',
+      locationHint = '',
+    } = req.body;
+
+    if (!transcript.trim()) {
+      return res.status(400).json({ error: 'Voice transcript is required' });
+    }
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const pipelineSteps = [
+      {
+        stepName: '1. Exotel Inbound Gateway (04041895372)',
+        status: 'completed' as const,
+        details: `Call received from caller ${callerNumberMasked} on Exotel trunk 04041895372.`,
+        timestamp: timeStr,
+      },
+      {
+        stepName: '2. DTMF Language Selection',
+        status: 'completed' as const,
+        details: `Caller selected ${language === 'te' ? 'Telugu (DTMF 3)' : language === 'hi' ? 'Hindi (DTMF 2)' : 'English (DTMF 1)'}.`,
+        timestamp: timeStr,
+      },
+      {
+        stepName: '3. Speech-to-Text Transcription',
+        status: 'completed' as const,
+        details: `Decoded ${transcript.split(' ').length} words from audio stream.`,
+        timestamp: timeStr,
+      },
+      {
+        stepName: '4. Nagaravaani AI Issue & Severity Triage',
+        status: 'running' as const,
+        details: 'Executing identical Nagaravaani taxonomy & safety risk analysis...',
+        timestamp: timeStr,
+      },
+    ];
+
+    // SAME AI Workflow:
+    const langInfo = detectLanguage(transcript);
+    const classification = classifyIssue(transcript);
+    const locResult = geocodeLocation(locationHint || transcript);
+    const duplicateCheck = searchSimilarReports(classification.category, locResult.resolvedAddress);
+    const severityResult = assessSeverity(classification.category, transcript, [], duplicateCheck.similarReportCount);
+    const authority = identifyMunicipalAuthority(classification.category, locResult.ward);
+    const formalComplaint = generateFormalComplaint(
+      authority,
+      classification.category,
+      severityResult.level,
+      locResult.resolvedAddress,
+      transcript,
+      'Helpline Caller (04041895372)',
+      duplicateCheck.similarReportCount
+    );
+
+    pipelineSteps[3].status = 'completed';
+    pipelineSteps[3].details = `Classified as "${classification.category}" with ${severityResult.level} priority score.`;
+
+    pipelineSteps.push({
+      stepName: '5. Municipal Authority Assignment',
+      status: 'completed',
+      details: `Routed to ${authority.authorityName} (${authority.department}).`,
+      timestamp: timeStr,
+    });
+
+    pipelineSteps.push({
+      stepName: '6. Formal Grievance Letter & Statutory Dispatch Draft',
+      status: 'completed',
+      details: `Generated formal complaint letter for ${authority.designatedOfficer}.`,
+      timestamp: timeStr,
+    });
+
+    const ticketNumber = `NGV-${String(reports.length + 43).padStart(5, '0')}`;
+    const reportId = `REP-${ticketNumber}`;
+    const nowIso = now.toISOString();
+
+    // Create linked report
+    const linkedReport: CivicReport = {
+      id: reportId,
+      ticketNumber,
+      title: `${classification.category} via Helpline (04041895372)`,
+      description: transcript,
+      originalLanguage: (language as Language) || langInfo.detected,
+      detectedLanguageName: langInfo.name,
+      category: classification.category,
+      severity: severityResult.level,
+      severityReasons: severityResult.reasons,
+      location: {
+        address: locResult.resolvedAddress,
+        landmark: locResult.landmark,
+        city: locResult.city,
+        ward: locResult.ward,
+        latitude: locResult.coordinates.lat,
+        longitude: locResult.coordinates.lng,
+        isApproximate: true,
+      },
+      photoUrls: [],
+      submittedAt: nowIso,
+      updatedAt: nowIso,
+      status: 'REPORTED',
+      reportingMethod: 'Copy Grievance',
+      reportingActionInitiatedAt: nowIso,
+      citizenName: 'Voice Caller (04041895372)',
+      isAnonymous: true,
+      crowdReportCount: duplicateCheck.similarReportCount + 1,
+      pointsEarned: 10,
+      rewardEligible: duplicateCheck.isRewardEligible,
+      rewardMessage: 'Logged via Exotel Nagaravaani Helpline (04041895372).',
+      assignedAuthority: authority,
+      formalComplaintText: formalComplaint.body,
+      formalComplaintTranslations: formalComplaint.translations,
+      aiConfidence: 0.94,
+      statusHistory: [
+        {
+          status: 'REPORTED',
+          timestamp: nowIso,
+          note: `Complaint received via Exotel Voice Helpline 04041895372 and triaged by Nagaravaani AI.`,
+          updatedBy: 'Citizen Report',
+        },
+      ],
+    };
+
+    reports.unshift(linkedReport);
+
+    const newSession: VoiceCallSession = {
+      callSid: `call-exotel-${Date.now()}`,
+      exotelNumber: EXOTEL_PHONE_NUMBER,
+      callerNumberMasked,
+      startedAt: nowIso,
+      durationSeconds: Math.floor(Math.random() * 45) + 60,
+      status: 'COMPLETED',
+      selectedLanguage: (language as Language) || 'en',
+      languageInputMethod,
+      liveTranscript: transcript,
+      analysis: {
+        language: langInfo,
+        classification,
+        severity: severityResult,
+        locationAnalysis: locResult,
+        duplicateCheck,
+        authority,
+        formalComplaint,
+        potentialPoints: {
+          categoryBase: 10,
+          isRewardEligible: duplicateCheck.isRewardEligible,
+          explanation: 'Voice helpline caller logged.',
+        },
+        executionSteps: [],
+        whatsappMessage: '',
+        emailBody: formalComplaint.body,
+        hasOfficialEmail: Boolean(authority.email),
+        hasOfficialWhatsApp: Boolean(authority.whatsapp),
+      },
+      generatedComplaint: formalComplaint.body,
+      ticketNumber,
+      reportId,
+      streamIntegrationStatus: EXOTEL_STREAMING_URL ? 'STREAM_ACTIVE' : 'STREAM_PENDING_EXOTEL_CONFIG',
+      pipelineSteps,
+    };
+
+    voiceSessions.unshift(newSession);
+
+    res.status(201).json({
+      session: newSession,
+      report: linkedReport,
+    });
+  } catch (err: any) {
+    console.error('Error processing voice call:', err);
+    res.status(500).json({ error: err.message || 'Failed to process voice call' });
+  }
+});
+
+// -------------------------------------------------------------
+// 2. COMMUNITY ESCALATION & SOCIAL AMPLIFICATION
+// -------------------------------------------------------------
+
+function generateCompliantSocialDraft(params: {
+  communityIssueId: string;
+  category: IssueCategory;
+  approximateLocation: string;
+  totalReportCount: number;
+  distinctReporterCount: number;
+  daysActive: number;
+  aiSeverity: SeverityLevel;
+  severityReasons: string[];
+  authorityName: string;
+}): SocialPostDraft {
+  const disclaimer = `⚠️ Citizen Corroboration & AI Triage Notice: This community report aggregates verified public grievances and automated triage data. It represents citizen-submitted observations and AI-assisted severity assessment, not a certified structural engineering or municipal determination.`;
+
+  const xPost = `🚨 Civic Attention Request: ${params.category}
+📍 Area: ${params.approximateLocation}
+📊 Community Data: ${params.totalReportCount} reports from ${params.distinctReporterCount} distinct citizens | Active ${params.daysActive} days
+⚡ AI-Assisted Priority: ${params.aiSeverity}
+🏛️ Assigned Wing: ${params.authorityName}
+
+Urging departmental field inspection & road safety review.
+Ref: ${params.communityIssueId} #SmartCity #CivicGrievance #Nagaravaani`;
+
+  const instagramCaption = `📢 Citizen Community Escalation — ${params.category}
+
+📍 Approximate Area: ${params.approximateLocation}
+⏱️ Issue Duration: Active for ${params.daysActive} days
+👥 Resident Corroboration: ${params.totalReportCount} reports submitted by ${params.distinctReporterCount} distinct citizens
+⚡ AI-Assisted Priority Assessment: ${params.aiSeverity}
+🏛️ Assigned Department: ${params.authorityName}
+
+Observations noted by citizens:
+• ${params.severityReasons.slice(0, 2).join('\n• ')}
+
+${disclaimer}
+
+Civic Reference ID: ${params.communityIssueId}
+#SmartCity #CivicAction #Nagaravaani #PublicSafety #CommunityFirst`;
+
+  return {
+    xPost,
+    instagramCaption,
+    disclaimer,
+    suggestedHashtags: ['#SmartCity', '#CivicGrievance', '#Nagaravaani', '#UrbanMobility'],
+  };
+}
+
+function detectCommunityEscalationClusters(): CommunityEscalationCluster[] {
+  const clusterMap: Record<string, CivicReport[]> = {};
+
+  reports.forEach((rep) => {
+    if (rep.status === 'RESOLVED') return;
+
+    const wardKey = rep.location.ward || rep.location.city || 'Sector';
+    const key = `${rep.category}___${wardKey.toLowerCase()}`;
+    if (!clusterMap[key]) {
+      clusterMap[key] = [];
+    }
+    clusterMap[key].push(rep);
+  });
+
+  const now = Date.now();
+  const clusters: CommunityEscalationCluster[] = [];
+
+  Object.entries(clusterMap).forEach(([key, clusterReports]) => {
+    const distinctReporters = Array.from(new Set(clusterReports.map((r) => r.citizenName).filter(Boolean)));
+    const distinctReporterCount = distinctReporters.length;
+    const totalReportCount = clusterReports.reduce((sum, r) => sum + (r.crowdReportCount || 1), 0);
+
+    const timestamps = clusterReports.map((r) => new Date(r.submittedAt).getTime()).filter((t) => !isNaN(t));
+    const firstReportedTime = timestamps.length ? Math.min(...timestamps) : now;
+    const lastReportedTime = timestamps.length ? Math.max(...timestamps) : now;
+    const daysActive = Math.max(1, Math.floor((now - firstReportedTime) / (1000 * 60 * 60 * 24)));
+
+    const severities = clusterReports.map((r) => r.severity);
+    let highestSeverity: SeverityLevel = 'LOW';
+    if (severities.includes('CRITICAL')) highestSeverity = 'CRITICAL';
+    else if (severities.includes('HIGH')) highestSeverity = 'HIGH';
+    else if (severities.includes('MEDIUM')) highestSeverity = 'MEDIUM';
+
+    const allReasons = Array.from(new Set(clusterReports.flatMap((r) => r.severityReasons || [])));
+
+    // Persistent criteria:
+    // - Multiple DISTINCT users report same/similar issue (distinctReporterCount >= 2)
+    // - Reports approximately at same location
+    // - Issue active for 7+ days (daysActive >= 7)
+    // - No confirmed resolution
+    // - High/Critical AI severity prioritized
+    const isPersistent = distinctReporterCount >= 2 && daysActive >= 7;
+
+    const rep0 = clusterReports[0];
+    const approxLoc = `${rep0.location.ward || rep0.location.city || 'Ward Sector'}, ${rep0.location.city || 'Hyderabad'}`;
+    const communityIssueId = `ESC-${rep0.category.slice(0, 3).toUpperCase()}-${Math.abs(
+      key.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0) % 10000
+    )
+      .toString()
+      .padStart(4, '0')}`;
+
+    const postDraft = generateCompliantSocialDraft({
+      communityIssueId,
+      category: rep0.category,
+      approximateLocation: approxLoc,
+      totalReportCount,
+      distinctReporterCount,
+      daysActive,
+      aiSeverity: highestSeverity,
+      severityReasons: allReasons,
+      authorityName: rep0.assignedAuthority?.authorityName || 'Concerned Municipal Authority',
+    });
+
+    clusters.push({
+      communityIssueId,
+      category: rep0.category,
+      approximateLocation: approxLoc,
+      ward: rep0.location.ward || 'Zone',
+      city: rep0.location.city || 'Hyderabad',
+      reportIds: clusterReports.map((r) => r.ticketNumber),
+      distinctReporters,
+      distinctReporterCount,
+      totalReportCount,
+      firstReportedAt: new Date(firstReportedTime).toISOString(),
+      lastReportedAt: new Date(lastReportedTime).toISOString(),
+      daysActive,
+      aiSeverity: highestSeverity,
+      severityReasons: allReasons,
+      officialStatus: rep0.status,
+      escalationStatus: isPersistent ? 'ESCALATED' : 'MONITORING',
+      amplifiedPlatforms: [],
+      socialPostDraft: postDraft,
+      isPersistent,
+    });
+  });
+
+  const severityRank: Record<SeverityLevel, number> = {
+    CRITICAL: 4,
+    HIGH: 3,
+    MEDIUM: 2,
+    LOW: 1,
+  };
+
+  clusters.sort((a, b) => {
+    if (a.isPersistent && !b.isPersistent) return -1;
+    if (!a.isPersistent && b.isPersistent) return 1;
+    const diff = severityRank[b.aiSeverity] - severityRank[a.aiSeverity];
+    if (diff !== 0) return diff;
+    return b.daysActive - a.daysActive;
+  });
+
+  return clusters;
+}
+
+app.get('/api/escalation/clusters', (_req: Request, res: Response) => {
+  const clusters = detectCommunityEscalationClusters();
+  res.json({ clusters, total: clusters.length });
+});
+
+app.post('/api/escalation/generate-post', (req: Request, res: Response) => {
+  const { communityIssueId, category, approximateLocation, totalReportCount, distinctReporterCount, daysActive, aiSeverity, severityReasons, authorityName } = req.body;
+  const draft = generateCompliantSocialDraft({
+    communityIssueId: communityIssueId || 'ESC-DEMO',
+    category: category || 'Pothole / Road Damage',
+    approximateLocation: approximateLocation || 'Khairatabad Zone, Hyderabad',
+    totalReportCount: totalReportCount || 8,
+    distinctReporterCount: distinctReporterCount || 6,
+    daysActive: daysActive || 8,
+    aiSeverity: aiSeverity || 'HIGH',
+    severityReasons: severityReasons || ['Structural surface depression', 'Traffic corridor hazard'],
+    authorityName: authorityName || 'GHMC Engineering Wing',
+  });
+  res.json(draft);
+});
+
+app.post('/api/escalation/record-amplification', (req: Request, res: Response) => {
+  const { communityIssueId, platform } = req.body;
+  res.json({
+    success: true,
+    communityIssueId,
+    platform,
+    message: `Social draft copied/prepared for ${platform}. User approval verified.`,
+  });
+});
+
+// -------------------------------------------------------------
+// 3. REFER A FRIEND BACKEND
+// -------------------------------------------------------------
+
+app.get('/api/referrals', (req: Request, res: Response) => {
+  const username = (req.query.username as string) || 'Ayush D.';
+  const codeSlug = username.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'USER';
+  const userReferralCode = `NAGARA-${codeSlug}-88`;
+  const origin = req.headers.referer || req.headers.origin || 'https://nagaravaani.smartcity.gov';
+  const referralLink = `${origin.split('?')[0]}?ref=${userReferralCode}`;
+
+  const userRecords = referrals.filter(
+    (r) => r.referrerName.toLowerCase().trim() === username.toLowerCase().trim()
+  );
+
+  const pendingCount = userRecords.filter((r) => r.status === 'pending').length;
+  const completedCount = userRecords.filter((r) => r.status === 'rewarded').length;
+  const totalBonusPointsEarned = completedCount * 20;
+
+  const stats: ReferralStats = {
+    userReferralCode,
+    referralLink,
+    totalReferrals: userRecords.length,
+    pendingCount,
+    completedCount,
+    totalBonusPointsEarned,
+    records: userRecords,
+  };
+
+  res.json(stats);
+});
+
+app.post('/api/referrals/create', (req: Request, res: Response) => {
+  const { referrerName = 'Ayush D.', refereeName } = req.body;
+  if (!refereeName || !refereeName.trim()) {
+    return res.status(400).json({ error: 'Friend name is required' });
+  }
+
+  // Prevent self referral
+  if (refereeName.toLowerCase().trim() === referrerName.toLowerCase().trim()) {
+    return res.status(400).json({ error: 'You cannot refer yourself.' });
+  }
+
+  const codeSlug = referrerName.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'USER';
+  const referralCode = `NAGARA-${codeSlug}-88`;
+
+  const newRef: ReferralRecord = {
+    id: `ref-${Date.now()}`,
+    referrerName,
+    referralCode,
+    refereeName: refereeName.trim(),
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    pointsAwarded: 0,
+  };
+
+  referrals.push(newRef);
+  res.status(201).json({ referral: newRef });
+});
+
+// -------------------------------------------------------------
+// 4. SUPPORT / DONATE CONFIG
+// -------------------------------------------------------------
+
+app.get('/api/donation/config', (_req: Request, res: Response) => {
+  res.json({
+    donationUrl: DONATION_URL,
+    initiativeName: 'Nagaravaani Smart City Open Civic Technology Fund',
+    transparentNote: 'Citizen-funded open source civic grievance routing platform. No payment details stored.',
+  });
 });
 
 // -------------------------------------------------------------

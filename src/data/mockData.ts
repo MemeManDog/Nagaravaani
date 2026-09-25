@@ -1,4 +1,4 @@
-import { CivicReport, LeaderboardUser, MunicipalAuthority } from '../types';
+import { CivicReport, LeaderboardUser, MunicipalAuthority, VoiceCallSession, ReferralRecord, Language } from '../types';
 
 // Requirement 3: Configurable Municipal Authority database with explicit DEMO/MOCK indicators
 export const MUNICIPAL_AUTHORITIES: MunicipalAuthority[] = [
@@ -252,6 +252,120 @@ export const INITIAL_REPORTS: CivicReport[] = [
       },
     ],
   },
+  // Persistent Issue Cluster: Ameerpet Open Sewage (8 days active, 12 reports, 9 distinct users, HIGH severity)
+  {
+    id: 'REP-NGV-004',
+    ticketNumber: 'NGV-00029',
+    title: 'Severe open sewage overflow and foul smell near Ameerpet Metro & SR Nagar Colony',
+    description: 'Choked underground storm drainage causing heavy domestic sewage to spill across the colony road. Foul stench and pathogen exposure persisting for over a week.',
+    originalLanguage: 'en',
+    detectedLanguageName: 'English',
+    category: 'Open Sewage / Drainage',
+    severity: 'HIGH',
+    severityReasons: [
+      'Contaminated sewage overflow covering 60 meters of residential road',
+      'Direct public exposure to contaminated domestic wastewater',
+      'Persistent unaddressed overflow active for 8 consecutive days',
+      'Corroborated by 9 distinct citizen reporters in the ward sector',
+    ],
+    location: {
+      address: 'Main Colony Road, Near Ameerpet Metro & SR Nagar Junction, Hyderabad',
+      landmark: 'Behind Metro Pillar A-18',
+      city: 'Hyderabad',
+      ward: 'Khairatabad Zone (Ward 98)',
+      latitude: 17.4378,
+      longitude: 78.4485,
+      isApproximate: false,
+    },
+    photoUrls: [
+      'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&w=800&q=80',
+    ],
+    submittedAt: '2026-09-17T08:15:00Z',
+    updatedAt: '2026-09-24T16:20:00Z',
+    status: 'REPORTED',
+    reportingMethod: 'Email',
+    reportingActionInitiatedAt: '2026-09-17T08:20:00Z',
+    citizenName: 'Kavitha Rao',
+    isAnonymous: false,
+    crowdReportCount: 12,
+    pointsEarned: 20,
+    rewardEligible: true,
+    rewardMessage: '+20 points awarded for verified open sewage report.',
+    assignedAuthority: MUNICIPAL_AUTHORITIES[1],
+    formalComplaintText: `To: General Manager, Operations & Sewerage Maintenance, HMWSSB Division VI\nSubject: Urgent Redressal Request — Persistent Open Sewage Overflow at Ameerpet / SR Nagar Junction\n\nRespected Sir/Madam,\n\nThis is a formal grievance regarding the persistent sewage overflow near Ameerpet Metro & SR Nagar Colony Road. Twelve reports from nine distinct local residents have been recorded over the past 8 days. The overflow poses acute sanitation hazards.\n\nRegards,\nKavitha Rao & Concerned Residents`,
+    aiConfidence: 0.95,
+    statusHistory: [
+      {
+        status: 'DRAFTED',
+        timestamp: '2026-09-17T08:15:00Z',
+        note: 'AI triage analyzed sewage discharge and flagged high sanitation hazard.',
+        updatedBy: 'AI Assessment',
+      },
+      {
+        status: 'REPORTED',
+        timestamp: '2026-09-17T08:20:00Z',
+        note: 'Citizen dispatched formal complaint via official HMWSSB channel.',
+        updatedBy: 'Citizen Report',
+      },
+    ],
+  },
+  // Persistent Issue Cluster: Malakpet Flooding (11 days active, 10 reports, 7 distinct users, CRITICAL severity)
+  {
+    id: 'REP-NGV-005',
+    ticketNumber: 'NGV-00019',
+    title: 'Severe Underpass Inundation & Blocked Storm Drain at Malakpet Railway Underbridge',
+    description: 'Recurrent severe waterlogging under the railway bridge exceeding 2 feet. Transit buses and auto-rickshaws continually stalling.',
+    originalLanguage: 'te',
+    detectedLanguageName: 'Telugu (తెలుగు)',
+    category: 'Flooding / Waterlogging',
+    severity: 'CRITICAL',
+    severityReasons: [
+      'Submerged road underpass blocking arterial public transit',
+      'Water depth exceeding safe vehicular threshold (over 2 feet)',
+      'Underground culvert blocked by debris; active for 11 days',
+      'Critical risk of passenger entrapment during rains',
+    ],
+    location: {
+      address: 'Malakpet Railway Underbridge, Old City Transit Corridor, Hyderabad',
+      landmark: 'Near Malakpet Railway Station Entrance',
+      city: 'Hyderabad',
+      ward: 'South Zone (Ward 84 - Dabeerpura / Malakpet)',
+      latitude: 17.3755,
+      longitude: 78.4975,
+      isApproximate: false,
+    },
+    photoUrls: [
+      'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=800&q=80',
+    ],
+    submittedAt: '2026-09-14T10:00:00Z',
+    updatedAt: '2026-09-24T18:00:00Z',
+    status: 'REPORTED',
+    reportingMethod: 'WhatsApp',
+    reportingActionInitiatedAt: '2026-09-14T10:05:00Z',
+    citizenName: 'Venkatesh M.',
+    isAnonymous: false,
+    crowdReportCount: 10,
+    pointsEarned: 50,
+    rewardEligible: true,
+    rewardMessage: '+50 points awarded for verified flooding report.',
+    assignedAuthority: MUNICIPAL_AUTHORITIES[1],
+    formalComplaintText: `To: General Manager, HMWSSB Drainage & Stormwater Wing\nSubject: Critical Emergency Notice — Unresolved Waterlogging at Malakpet Railway Underbridge\n\nRespected Sir/Madam,\n\nSubmerged roadway continues to cause severe traffic disruption and engine stalls. Ten citizen reports have documented this condition over 11 days. Immediate deployment of high-capacity dewatering machinery is urgently requested.\n\nRegards,\nVenkatesh M.`,
+    aiConfidence: 0.98,
+    statusHistory: [
+      {
+        status: 'DRAFTED',
+        timestamp: '2026-09-14T10:00:00Z',
+        note: 'AI classified as Critical priority due to underpass entrapment hazard.',
+        updatedBy: 'AI Assessment',
+      },
+      {
+        status: 'REPORTED',
+        timestamp: '2026-09-14T10:05:00Z',
+        note: 'Reported via WhatsApp grievance window.',
+        updatedBy: 'Citizen Report',
+      },
+    ],
+  },
 ];
 
 export const INITIAL_LEADERBOARD: LeaderboardUser[] = [
@@ -348,5 +462,184 @@ export const SAMPLE_INPUT_PRESETS = [
     locationText: 'Near Dabeerpura Railway Station, Ward 84, Hyderabad',
     category: 'Garbage / Waste' as const,
     photoUrl: 'https://images.unsplash.com/photo-1590674899484-d5640e854abe?auto=format&fit=crop&w=800&q=80',
+  },
+];
+
+// -------------------------------------------------------------
+// EXOTEL VOICE HELPLINE SESSIONS (Number: 04041895372)
+// -------------------------------------------------------------
+export const INITIAL_VOICE_SESSIONS: VoiceCallSession[] = [
+  {
+    callSid: 'call-exotel-9941',
+    exotelNumber: '04041895372',
+    callerNumberMasked: '+91 98480 *****',
+    startedAt: '2026-09-25T10:15:00Z',
+    durationSeconds: 114,
+    status: 'COMPLETED',
+    selectedLanguage: 'te',
+    languageInputMethod: 'DTMF_3_TE',
+    liveTranscript: 'నమస్కారం అండి, ఖైరతాబాద్ మెట్రో పిల్లర్ 98 దగ్గర రోడ్డుపై భారీ గుంత పడింది. రాత్రి పూట బైకర్లు పడిపోతున్నారు. త్వరగా రిపేర్ చేయించండి.',
+    ticketNumber: 'NGV-00043',
+    reportId: 'REP-NGV-001',
+    streamIntegrationStatus: 'STREAM_PENDING_EXOTEL_CONFIG',
+    pipelineSteps: [
+      {
+        stepName: '1. Inbound Call Received (Exotel IVR Gateway)',
+        status: 'completed',
+        details: 'Caller connected to Nagaravaani Smart City Line 04041895372. Prompt: Press 1 for English, 2 for Hindi, 3 for Telugu.',
+        timestamp: '10:15:02',
+      },
+      {
+        stepName: '2. DTMF Language Selection',
+        status: 'completed',
+        details: 'Caller pressed 3 (Telugu / తెలుగు). IVR language stream locked to Telugu ASR.',
+        timestamp: '10:15:08',
+      },
+      {
+        stepName: '3. Speech-to-Text Transcription',
+        status: 'completed',
+        details: 'ASR decoded 32 words with 97.4% confidence (Telugu dialect).',
+        timestamp: '10:15:45',
+      },
+      {
+        stepName: '4. Nagaravaani AI Core Triage',
+        status: 'completed',
+        details: 'Classified: Pothole / Road Damage | Severity: HIGH (Two-wheeler skidding risk) | Location: Khairatabad Ward 98.',
+        timestamp: '10:15:52',
+      },
+      {
+        stepName: '5. Municipal Authority Assignment',
+        status: 'completed',
+        details: 'Routed to Executive Engineer (Roads & Infrastructure), GHMC Khairatabad Zone.',
+        timestamp: '10:15:58',
+      },
+      {
+        stepName: '6. Formal Grievance Letter & Dispatch Ready',
+        status: 'completed',
+        details: 'Statutory complaint letter generated in Telugu, Hindi & English. Ticket NGV-00043 reserved.',
+        timestamp: '10:16:04',
+      },
+    ],
+    generatedComplaint: `స్వీకర్త:\nExecutive Engineer (Road Infrastructure)\nGHMC Zonal Office, Khairatabad, Hyderabad\n\nవిషయం: తక్షణ పరిశీలన మరియు నివారణ చర్యల కొరకు అధికారిక విన్నపం — రోడ్డు గుంతలు / పాడైన రహదారి (ఖైరతాబాద్ మెట్రో పిల్లర్ 98)\n\nగౌరవనీయులైన అధికారి గారికి,\n04041895372 నగరవాణి వాయిస్ హెల్ప్‌లైన్ ద్వారా పౌరుడు ఫోన్ చేసి తెలిపిన వివరాల ప్రకారం, ఖైరతాబాద్ మెట్రో పిల్లర్ 98 వద్ద రహదారిపై ప్రమాదకర గుంత ఏర్పడి ద్విచక్ర వాహనదారులకు ప్రమాదకరంగా మారింది. తక్షణమే మరమ్మతులు చేపట్టవలసిందిగా కోరుతున్నాము.`,
+  },
+  {
+    callSid: 'call-exotel-9942',
+    exotelNumber: '04041895372',
+    callerNumberMasked: '+91 94401 *****',
+    startedAt: '2026-09-25T11:02:00Z',
+    durationSeconds: 88,
+    status: 'COMPLETED',
+    selectedLanguage: 'hi',
+    languageInputMethod: 'DTMF_2_HI',
+    liveTranscript: 'हेलो, बेगमपेट में सरकारी स्कूल के पास स्ट्रीट लाइट का खंभा झुक गया है और नंगी तार लटक रही है। रात में बहुत अंधेरा रहता है और करंट लगने का खतरा है।',
+    ticketNumber: 'NGV-00044',
+    streamIntegrationStatus: 'STREAM_PENDING_EXOTEL_CONFIG',
+    pipelineSteps: [
+      {
+        stepName: '1. Inbound Call Received (Exotel IVR Gateway)',
+        status: 'completed',
+        details: 'Caller connected to Nagaravaani Smart City Line 04041895372.',
+        timestamp: '11:02:01',
+      },
+      {
+        stepName: '2. DTMF Language Selection',
+        status: 'completed',
+        details: 'Caller pressed 2 (Hindi / हिन्दी).',
+        timestamp: '11:02:06',
+      },
+      {
+        stepName: '3. Speech-to-Text Transcription',
+        status: 'completed',
+        details: 'ASR transcribed Hindi audio with 98.1% accuracy.',
+        timestamp: '11:02:35',
+      },
+      {
+        stepName: '4. Nagaravaani AI Core Triage',
+        status: 'completed',
+        details: 'Classified: Broken Streetlight | Severity: CRITICAL (Exposed wire near school) | Location: Begumpet.',
+        timestamp: '11:02:40',
+      },
+      {
+        stepName: '5. Municipal Authority Assignment',
+        status: 'completed',
+        details: 'Assigned to GHMC Electrical & Lighting Wing.',
+        timestamp: '11:02:44',
+      },
+      {
+        stepName: '6. Formal Grievance Letter & Dispatch Ready',
+        status: 'completed',
+        details: 'Drafted bilingual grievance notice (Ticket NGV-00044).',
+        timestamp: '11:02:50',
+      },
+    ],
+    generatedComplaint: `सेवा में:\nकार्यकारी अभियंता (विद्युत एवं प्रकाश व्यवस्था)\nग्रेटर हैदराबाद नगर निगम (GHMC)\n\nविषय: तत्काल निरीक्षण एवं निवारण हेतु औपचारिक अनुरोध — बंद / खराब स्ट्रीट लाइट (सरकारी स्कूल, बेगमपेट)\n\nआदरणीय महोदय,\n04041895372 वॉयस हेल्पलाइन पर दर्ज नागरिक शिकायत के अनुसार, बेगमपेट सरकारी स्कूल के पास स्ट्रीट लाइट का खंभा क्षतिग्रस्त है तथा खुली तारें लटक रही हैं, जिससे दुर्घटना की भारी आशंका है। कृपया तत्काल संज्ञान लें।`,
+  },
+];
+
+// Sample calls for user testing & interactive simulation
+export const SAMPLE_VOICE_CALLS = [
+  {
+    id: 'sample-call-te',
+    lang: 'te' as Language,
+    dtmf: '3' as const,
+    langName: 'Telugu (తెలుగు)',
+    callerMasked: '+91 98480 *****',
+    transcript: 'మా కాలనీలో మలక్‌పేట్ బ్రిడ్జి కింద డ్రైనేజీ పైపు పగిలి మురుగునీరు రోడ్డుపైకి వస్తోంది. తీవ్రమైన దుర్వాసన మరియు రాకపోకలు ఆగిపోయాయి.',
+    locationHint: 'Malakpet Railway Bridge Road, Hyderabad',
+  },
+  {
+    id: 'sample-call-hi',
+    lang: 'hi' as Language,
+    dtmf: '2' as const,
+    langName: 'Hindi (हिन्दी)',
+    callerMasked: '+91 94401 *****',
+    transcript: 'नमस्ते, अमीरपेट मेन रोड पर मेट्रो पिलर के पास बहुत बड़ा गड्ढा हो गया है। आज सुबह दो स्कूटर वाले गिरते-गिरते बचे हैं। तुरंत मरम्मत करवाएं।',
+    locationHint: 'Ameerpet Main Road near Metro Station, Hyderabad',
+  },
+  {
+    id: 'sample-call-en',
+    lang: 'en' as Language,
+    dtmf: '1' as const,
+    langName: 'English',
+    callerMasked: '+91 99890 *****',
+    transcript: 'Hello, there is an open manhole cover right next to the walkway on Sardar Patel Road, Begumpet. It is extremely hazardous for pedestrians at night.',
+    locationHint: 'Sardar Patel Road, Begumpet, Hyderabad',
+  },
+];
+
+// -------------------------------------------------------------
+// INITIAL REFERRALS (For current logged-in user Ayush D.)
+// -------------------------------------------------------------
+export const INITIAL_REFERRALS: ReferralRecord[] = [
+  {
+    id: 'ref-001',
+    referrerName: 'Ayush D.',
+    referralCode: 'NAGARA-AYUSH-88',
+    refereeName: 'Kavitha Rao',
+    status: 'rewarded',
+    firstReportTicketNumber: 'NGV-00029',
+    createdAt: '2026-09-16T14:20:00Z',
+    rewardedAt: '2026-09-17T08:20:00Z',
+    pointsAwarded: 20,
+  },
+  {
+    id: 'ref-002',
+    referrerName: 'Ayush D.',
+    referralCode: 'NAGARA-AYUSH-88',
+    refereeName: 'Venkatesh M.',
+    status: 'rewarded',
+    firstReportTicketNumber: 'NGV-00019',
+    createdAt: '2026-09-13T09:10:00Z',
+    rewardedAt: '2026-09-14T10:05:00Z',
+    pointsAwarded: 20,
+  },
+  {
+    id: 'ref-003',
+    referrerName: 'Ayush D.',
+    referralCode: 'NAGARA-AYUSH-88',
+    refereeName: 'Pooja Hegde',
+    status: 'pending',
+    createdAt: '2026-09-24T12:00:00Z',
+    pointsAwarded: 0,
   },
 ];

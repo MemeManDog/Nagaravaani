@@ -12,17 +12,25 @@ import {
   BarChart3, 
   PlusCircle, 
   Sparkles,
-  ShieldCheck 
+  ShieldCheck,
+  PhoneCall,
+  Megaphone,
+  Heart,
+  Gift,
 } from 'lucide-react';
+
+export type NavTab = 'report' | 'dashboard' | 'voice' | 'escalation' | 'map' | 'leaderboard' | 'directory';
 
 interface NavbarProps {
   currentLang: Language;
   onLanguageChange: (lang: Language) => void;
-  activeTab: 'report' | 'dashboard' | 'map' | 'leaderboard' | 'directory';
-  onTabChange: (tab: 'report' | 'dashboard' | 'map' | 'leaderboard' | 'directory') => void;
+  activeTab: NavTab;
+  onTabChange: (tab: NavTab) => void;
   userPoints: number;
   userName: string;
   onUpdateUserName: (name: string) => void;
+  onOpenSupportModal?: () => void;
+  onOpenReferralModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -33,6 +41,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   userPoints,
   userName,
   onUpdateUserName,
+  onOpenSupportModal,
+  onOpenReferralModal,
 }) => {
   const [isEditingUser, setIsEditingUser] = useState(false);
   const [tempName, setTempName] = useState(userName);
@@ -59,7 +69,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Brand Logo & Name */}
           <div 
             onClick={() => onTabChange('report')}
-            className="flex items-center gap-3 cursor-pointer group select-none"
+            className="flex items-center gap-3 cursor-pointer group select-none shrink-0"
           >
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xl transition-all duration-300 group-hover:scale-105 ${
               isDark
@@ -86,16 +96,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               <p className={`text-xs hidden md:block transition-colors ${
                 isDark ? 'text-slate-400 font-mono text-[11px]' : 'text-slate-500'
               }`}>
-                {isDark ? 'Neural Civic Triage & Municipal Routing' : 'Civic Triage & Municipal Reporting'}
+                {isDark ? 'Neural Civic Triage & Telephony Helpline' : 'Civic Triage & Telephony Helpline'}
               </p>
             </div>
           </div>
 
           {/* Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-1">
+          <nav className="hidden xl:flex items-center gap-1">
             <button
               onClick={() => onTabChange('report')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'report'
                   ? isDark
                     ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.25)]'
@@ -105,13 +115,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
-              <PlusCircle className={`w-4 h-4 ${isDark && activeTab === 'report' ? 'text-cyan-400' : ''}`} />
-              <span>{t.startReportBtn}</span>
+              <PlusCircle className={`w-3.5 h-3.5 ${isDark && activeTab === 'report' ? 'text-cyan-400' : ''}`} />
+              <span>Report</span>
             </button>
 
             <button
               onClick={() => onTabChange('dashboard')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'dashboard'
                   ? isDark
                     ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.25)]'
@@ -121,13 +131,48 @@ export const Navbar: React.FC<NavbarProps> = ({
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
-              <BarChart3 className={`w-4 h-4 ${isDark && activeTab === 'dashboard' ? 'text-cyan-400' : ''}`} />
-              <span>{t.viewDashboardBtn}</span>
+              <BarChart3 className={`w-3.5 h-3.5 ${isDark && activeTab === 'dashboard' ? 'text-cyan-400' : ''}`} />
+              <span>Dashboard</span>
+            </button>
+
+            {/* 1. VOICE HELPLINE (Exotel 04041895372) */}
+            <button
+              onClick={() => onTabChange('voice')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all relative ${
+                activeTab === 'voice'
+                  ? isDark
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.35)]'
+                    : 'bg-slate-900 text-white shadow-sm'
+                  : isDark
+                    ? 'text-slate-400 hover:text-cyan-300 hover:bg-slate-900/60'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <PhoneCall className={`w-3.5 h-3.5 ${activeTab === 'voice' ? 'text-cyan-400 animate-pulse' : 'text-emerald-500'}`} />
+              <span>☎️ Voice Helpline</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#10b981]" />
+            </button>
+
+            {/* 2. COMMUNITY ESCALATION */}
+            <button
+              onClick={() => onTabChange('escalation')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'escalation'
+                  ? isDark
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.35)]'
+                    : 'bg-slate-900 text-white shadow-sm'
+                  : isDark
+                    ? 'text-slate-400 hover:text-amber-300 hover:bg-slate-900/60'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              <Megaphone className={`w-3.5 h-3.5 ${activeTab === 'escalation' ? 'text-amber-400' : 'text-amber-500'}`} />
+              <span>📢 Escalation</span>
             </button>
 
             <button
               onClick={() => onTabChange('map')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'map'
                   ? isDark
                     ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.25)]'
@@ -137,13 +182,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
-              <MapPin className={`w-4 h-4 ${isDark && activeTab === 'map' ? 'text-cyan-400' : ''}`} />
-              <span>{t.liveMapBtn}</span>
+              <MapPin className={`w-3.5 h-3.5 ${isDark && activeTab === 'map' ? 'text-cyan-400' : ''}`} />
+              <span>Map</span>
             </button>
 
             <button
               onClick={() => onTabChange('leaderboard')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'leaderboard'
                   ? isDark
                     ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.25)]'
@@ -153,13 +198,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
-              <Award className={`w-4 h-4 ${isDark && activeTab === 'leaderboard' ? 'text-cyan-400' : ''}`} />
-              <span>{t.leaderboardBtn}</span>
+              <Award className={`w-3.5 h-3.5 ${isDark && activeTab === 'leaderboard' ? 'text-cyan-400' : ''}`} />
+              <span>Leaderboard</span>
             </button>
 
             <button
               onClick={() => onTabChange('directory')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'directory'
                   ? isDark
                     ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.25)]'
@@ -169,18 +214,55 @@ export const Navbar: React.FC<NavbarProps> = ({
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
-              <Building2 className={`w-4 h-4 ${isDark && activeTab === 'directory' ? 'text-cyan-400' : ''}`} />
-              <span>{t.municipalOfficesBtn}</span>
+              <Building2 className={`w-3.5 h-3.5 ${isDark && activeTab === 'directory' ? 'text-cyan-400' : ''}`} />
+              <span>Offices</span>
             </button>
           </nav>
 
-          {/* Right Area: Theme Switcher, Language Switcher & User Profile */}
-          <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Right Area: Donate, Refer, Theme Switcher, Language & Profile */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
             
+            {/* 3. SUPPORT / DONATE BUTTON */}
+            {onOpenSupportModal && (
+              <button
+                onClick={onOpenSupportModal}
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
+                  isDark
+                    ? 'bg-pink-950/40 border-pink-500/40 text-pink-300 hover:border-pink-400 hover:bg-pink-950/60'
+                    : 'bg-pink-50 border-pink-200 text-pink-700 hover:bg-pink-100'
+                }`}
+                title="Support Nagaravaani — Citizen Funded"
+              >
+                <Heart className="w-3.5 h-3.5 text-pink-500 fill-pink-500" />
+                <span className="hidden md:inline">Support</span>
+              </button>
+            )}
+
+            {/* 4. REFER A FRIEND BUTTON */}
+            {onOpenReferralModal && (
+              <button
+                onClick={onOpenReferralModal}
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
+                  isDark
+                    ? 'bg-cyan-950/50 border-cyan-500/40 text-cyan-300 hover:border-cyan-300'
+                    : 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
+                }`}
+                title="Refer friends & earn 20 points after their first civic report"
+              >
+                <Gift className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="hidden md:inline">Refer</span>
+                <span className={`text-[10px] px-1 py-0.2 rounded font-mono ${
+                  isDark ? 'bg-cyan-900 text-cyan-200' : 'bg-emerald-200 text-emerald-900'
+                }`}>
+                  +20
+                </span>
+              </button>
+            )}
+
             {/* FUTURISTIC / STANDARD THEME TOGGLE */}
             <button
               onClick={toggleTheme}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer select-none ${
+              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer select-none ${
                 isDark
                   ? 'bg-slate-900/90 text-cyan-300 border-cyan-500/50 shadow-[0_0_14px_rgba(6,182,212,0.4)] hover:border-cyan-300'
                   : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 shadow-xs'
@@ -203,17 +285,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
 
             {/* Language Selector */}
-            <div className={`relative flex items-center rounded-lg p-1 border transition-colors ${
+            <div className={`relative flex items-center rounded-lg p-0.5 border transition-colors ${
               isDark
                 ? 'bg-slate-900/90 border-slate-800'
                 : 'bg-slate-100 border-slate-200'
             }`}>
-              <Globe className={`w-3.5 h-3.5 ml-1 mr-1 hidden sm:inline ${
-                isDark ? 'text-slate-400' : 'text-slate-500'
-              }`} />
               <button
                 onClick={() => onLanguageChange('en')}
-                className={`px-2 py-1 text-xs font-semibold rounded transition-colors ${
+                className={`px-1.5 py-1 text-xs font-semibold rounded transition-colors ${
                   currentLang === 'en'
                     ? isDark
                       ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
@@ -228,7 +307,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
               <button
                 onClick={() => onLanguageChange('hi')}
-                className={`px-2 py-1 text-xs font-semibold rounded transition-colors ${
+                className={`px-1.5 py-1 text-xs font-semibold rounded transition-colors ${
                   currentLang === 'hi'
                     ? isDark
                       ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
@@ -243,7 +322,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
               <button
                 onClick={() => onLanguageChange('te')}
-                className={`px-2 py-1 text-xs font-semibold rounded transition-colors ${
+                className={`px-1.5 py-1 text-xs font-semibold rounded transition-colors ${
                   currentLang === 'te'
                     ? isDark
                       ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
@@ -259,24 +338,24 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
 
             {/* Citizen Points & Profile */}
-            <div className={`flex items-center gap-2 pl-2 border-l ${
+            <div className={`flex items-center gap-1.5 pl-1.5 border-l ${
               isDark ? 'border-slate-800' : 'border-slate-200'
             }`}>
               <div 
                 onClick={() => setIsEditingUser(!isEditingUser)}
-                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer transition-all border ${
+                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer transition-all border ${
                   isDark
                     ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300 hover:border-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
                     : 'bg-emerald-50 border-emerald-200 text-emerald-900 hover:bg-emerald-100'
                 }`}
-                title="Click to change your display name"
+                title="Click to change display name"
               >
-                <Award className={`w-4 h-4 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                <Award className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
                 <span className="text-xs font-bold font-mono tabular-nums">
-                  {userPoints} <span className={`font-normal hidden sm:inline ${isDark ? 'text-emerald-400/80' : 'text-emerald-700'}`}>pts</span>
+                  {userPoints} <span className="font-normal text-[10px]">pts</span>
                 </span>
                 <span className={isDark ? 'text-slate-700' : 'text-slate-300'}>|</span>
-                <span className={`text-xs font-semibold max-w-[85px] sm:max-w-[110px] truncate ${
+                <span className={`text-xs font-semibold max-w-[70px] sm:max-w-[95px] truncate ${
                   isDark ? 'text-slate-200' : 'text-slate-700'
                 }`}>
                   {userName}
@@ -287,58 +366,78 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Mobile Navigation Row */}
-        <div className={`flex lg:hidden overflow-x-auto py-2 gap-2 border-t no-scrollbar text-xs ${
+        <div className={`flex xl:hidden overflow-x-auto py-2 gap-2 border-t no-scrollbar text-xs ${
           isDark ? 'border-slate-800/80' : 'border-slate-100'
         }`}>
           <button
             onClick={() => onTabChange('report')}
-            className={`whitespace-nowrap px-3 py-1.5 rounded-md font-semibold transition-colors ${
+            className={`whitespace-nowrap px-2.5 py-1 rounded-md font-semibold transition-colors ${
               activeTab === 'report' 
                 ? isDark ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-slate-900 text-white' 
                 : isDark ? 'text-slate-400 bg-slate-900/60' : 'text-slate-600 bg-slate-100'
             }`}
           >
-            {t.startReportBtn}
+            Report
           </button>
           <button
             onClick={() => onTabChange('dashboard')}
-            className={`whitespace-nowrap px-3 py-1.5 rounded-md font-semibold transition-colors ${
+            className={`whitespace-nowrap px-2.5 py-1 rounded-md font-semibold transition-colors ${
               activeTab === 'dashboard' 
                 ? isDark ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-slate-900 text-white' 
                 : isDark ? 'text-slate-400 bg-slate-900/60' : 'text-slate-600 bg-slate-100'
             }`}
           >
-            {t.viewDashboardBtn}
+            Dashboard
+          </button>
+          <button
+            onClick={() => onTabChange('voice')}
+            className={`whitespace-nowrap px-2.5 py-1 rounded-md font-semibold transition-colors ${
+              activeTab === 'voice' 
+                ? isDark ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-slate-900 text-white' 
+                : isDark ? 'text-slate-400 bg-slate-900/60' : 'text-slate-600 bg-slate-100'
+            }`}
+          >
+            ☎️ Helpline
+          </button>
+          <button
+            onClick={() => onTabChange('escalation')}
+            className={`whitespace-nowrap px-2.5 py-1 rounded-md font-semibold transition-colors ${
+              activeTab === 'escalation' 
+                ? isDark ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-slate-900 text-white' 
+                : isDark ? 'text-slate-400 bg-slate-900/60' : 'text-slate-600 bg-slate-100'
+            }`}
+          >
+            📢 Escalation
           </button>
           <button
             onClick={() => onTabChange('map')}
-            className={`whitespace-nowrap px-3 py-1.5 rounded-md font-semibold transition-colors ${
+            className={`whitespace-nowrap px-2.5 py-1 rounded-md font-semibold transition-colors ${
               activeTab === 'map' 
                 ? isDark ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-slate-900 text-white' 
                 : isDark ? 'text-slate-400 bg-slate-900/60' : 'text-slate-600 bg-slate-100'
             }`}
           >
-            {t.liveMapBtn}
+            Map
           </button>
           <button
             onClick={() => onTabChange('leaderboard')}
-            className={`whitespace-nowrap px-3 py-1.5 rounded-md font-semibold transition-colors ${
+            className={`whitespace-nowrap px-2.5 py-1 rounded-md font-semibold transition-colors ${
               activeTab === 'leaderboard' 
                 ? isDark ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-slate-900 text-white' 
                 : isDark ? 'text-slate-400 bg-slate-900/60' : 'text-slate-600 bg-slate-100'
             }`}
           >
-            {t.leaderboardBtn}
+            Leaderboard
           </button>
           <button
             onClick={() => onTabChange('directory')}
-            className={`whitespace-nowrap px-3 py-1.5 rounded-md font-semibold transition-colors ${
+            className={`whitespace-nowrap px-2.5 py-1 rounded-md font-semibold transition-colors ${
               activeTab === 'directory' 
                 ? isDark ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-slate-900 text-white' 
                 : isDark ? 'text-slate-400 bg-slate-900/60' : 'text-slate-600 bg-slate-100'
             }`}
           >
-            {t.municipalOfficesBtn}
+            Offices
           </button>
         </div>
 
@@ -374,7 +473,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsEditingUser(false)}
-                  className={`px-2.5 py-1 text-xs transition-colors ${
+                  className={`px-2.5 py-1 text-xs transition-colors cursor-pointer ${
                     isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -382,7 +481,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${
+                  className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                     isDark
                       ? 'bg-cyan-500 text-slate-950 font-bold hover:bg-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.4)]'
                       : 'bg-emerald-600 text-white hover:bg-emerald-700'

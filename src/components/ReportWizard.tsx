@@ -88,8 +88,11 @@ export const ReportWizard: React.FC<ReportWizardProps> = ({
 
   // Requirement 1 & 7: Reporting State and Dedicated Confirmation Screen
   const [isRecordingReport, setIsRecordingReport] = useState<boolean>(false);
-  const [confirmationData, setConfirmationData] = useState<AwardPointsResult | null>(null);
+  const [confirmationData, setConfirmationData] = useState<(AwardPointsResult & { referralNotice?: string }) | null>(null);
   const [showOfficeDetail, setShowOfficeDetail] = useState<boolean>(false);
+  const [referralCode, setReferralCode] = useState<string>(() => {
+    return localStorage.getItem('civicai_referral_code') || '';
+  });
 
   // Speech Recognition setup (Web Speech API)
   const recognitionRef = useRef<any>(null);
@@ -295,6 +298,7 @@ export const ReportWizard: React.FC<ReportWizardProps> = ({
         reportingMethod: method,
         editedComplaintText: editableComplaint,
         agentAnalysis: agentResult,
+        referralCode: referralCode.trim() || undefined,
       });
 
       // Update local confirmation state
@@ -1111,6 +1115,30 @@ export const ReportWizard: React.FC<ReportWizardProps> = ({
 
                 {/* AVAILABLE OFFICIAL REPORTING CHANNELS */}
                 <div className="space-y-3 pt-2">
+                  {/* Referral Code (Optional) */}
+                  <div className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${
+                    isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <Award className="w-4 h-4 text-cyan-400 shrink-0" />
+                      <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>
+                        Referred by a friend? Enter their referral code:
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      value={referralCode}
+                      onChange={(e) => {
+                        setReferralCode(e.target.value);
+                        localStorage.setItem('civicai_referral_code', e.target.value.trim().toUpperCase());
+                      }}
+                      placeholder="e.g. NAGARA-AYUSH-88"
+                      className={`w-full sm:w-44 px-2.5 py-1 text-xs font-mono rounded-lg border uppercase focus:outline-none ${
+                        isDark ? 'bg-slate-900 border-slate-700 text-cyan-300' : 'bg-white border-slate-300 text-slate-800'
+                      }`}
+                    />
+                  </div>
+
                   <div className="flex items-center justify-between">
                     <span className={`text-xs font-bold uppercase tracking-wider block ${
                       isDark ? 'text-cyan-400 font-mono' : 'text-slate-600'
@@ -1425,6 +1453,18 @@ export const ReportWizard: React.FC<ReportWizardProps> = ({
               </span>
             </div>
           </div>
+
+          {/* Referral Bonus Notice if applicable */}
+          {confirmationData.referralNotice && (
+            <div className={`p-4 rounded-xl border text-xs font-semibold flex items-center gap-3 ${
+              isDark
+                ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+                : 'bg-emerald-50 border-emerald-300 text-emerald-800'
+            }`}>
+              <Award className="w-5 h-5 text-emerald-400 shrink-0" />
+              <span>{confirmationData.referralNotice}</span>
+            </div>
+          )}
 
           {/* Prompt Mandate: Clear Distinction between Recorded vs Officially Received */}
           <div className={`p-4 rounded-xl border space-y-1.5 text-xs ${

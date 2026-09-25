@@ -10,6 +10,10 @@ export interface TranslationDictionary {
   liveMapBtn: string;
   leaderboardBtn: string;
   municipalOfficesBtn: string;
+  voiceHelplineBtn?: string;
+  escalationBtn?: string;
+  supportBtn?: string;
+  referBtn?: string;
   languageSelectLabel: string;
   
   // Steps
