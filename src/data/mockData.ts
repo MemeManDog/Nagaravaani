@@ -466,6 +466,60 @@ export const SAMPLE_INPUT_PRESETS = [
 ];
 
 // -------------------------------------------------------------
+// AUDIO UTILITY FOR HELPLINE AUDIO PLAYBACK & GEMINI LISTENING
+// -------------------------------------------------------------
+export function createSynthesizedAudioDataUrl(freq: number, durationSec: number = 3): string {
+  const sampleRate = 8000;
+  const numSamples = Math.floor(sampleRate * durationSec);
+  const dataSize = numSamples * 2;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  // RIFF chunk descriptor
+  view.setUint32(0, 0x52494646, false); // "RIFF"
+  view.setUint32(4, 36 + dataSize, true);
+  view.setUint32(8, 0x57415645, false); // "WAVE"
+
+  // FMT sub-chunk
+  view.setUint32(12, 0x666d7420, false); // "fmt "
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM format
+  view.setUint16(22, 1, true); // Mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+
+  // DATA sub-chunk
+  view.setUint32(36, 0x64617461, false); // "data"
+  view.setUint32(40, dataSize, true);
+
+  // Modulated voice-band telephony audio
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const envelope = Math.sin((Math.PI * i) / numSamples);
+    const sample =
+      0.5 * Math.sin(2 * Math.PI * freq * t) +
+      0.3 * Math.sin(2 * Math.PI * (freq * 1.5) * t) +
+      0.2 * Math.sin(2 * Math.PI * (freq * 0.8) * t);
+    const intSample = Math.max(-32768, Math.min(32767, Math.floor(sample * envelope * 22000)));
+    view.setInt16(44 + i * 2, intSample, true);
+  }
+
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return 'data:audio/wav;base64,' + (typeof btoa !== 'undefined' ? btoa(binary) : Buffer.from(binary, 'binary').toString('base64'));
+}
+
+// Pre-synthesized playable audio data URLs for telephony samples
+export const SAMPLE_AUDIO_TELUGU = createSynthesizedAudioDataUrl(380, 4);
+export const SAMPLE_AUDIO_HINDI = createSynthesizedAudioDataUrl(440, 4);
+export const SAMPLE_AUDIO_ENGLISH = createSynthesizedAudioDataUrl(520, 4);
+
+// -------------------------------------------------------------
 // EXOTEL VOICE HELPLINE SESSIONS (Number: 04041895372)
 // -------------------------------------------------------------
 export const INITIAL_VOICE_SESSIONS: VoiceCallSession[] = [
@@ -479,8 +533,13 @@ export const INITIAL_VOICE_SESSIONS: VoiceCallSession[] = [
     selectedLanguage: 'te',
     languageInputMethod: 'DTMF_3_TE',
     liveTranscript: 'నమస్కారం అండి, ఖైరతాబాద్ మెట్రో పిల్లర్ 98 దగ్గర రోడ్డుపై భారీ గుంత పడింది. రాత్రి పూట బైకర్లు పడిపోతున్నారు. త్వరగా రిపేర్ చేయించండి.',
+    englishTranslation: 'Hello sir, near Khairatabad metro pillar 98 there is a massive pothole on the road. At night two-wheeler riders are falling down. Please get it repaired immediately.',
     ticketNumber: 'NGV-00043',
     reportId: 'REP-NGV-001',
+    audioBase64: SAMPLE_AUDIO_TELUGU,
+    recordingUrl: 'https://api.exotel.com/v1/Accounts/nagaravaani/Recordings/rec_9941_telugu_khairatabad.wav',
+    audioListenedByGemini: true,
+    citizenUrgencyNotes: 'Caller expressed high distress regarding two-wheeler safety in unlit night conditions.',
     streamIntegrationStatus: 'STREAM_PENDING_EXOTEL_CONFIG',
     pipelineSteps: [
       {
@@ -496,9 +555,9 @@ export const INITIAL_VOICE_SESSIONS: VoiceCallSession[] = [
         timestamp: '10:15:08',
       },
       {
-        stepName: '3. Speech-to-Text Transcription',
+        stepName: '3. Gemini 3.8 Flash Audio Listening & Telephony ASR',
         status: 'completed',
-        details: 'ASR decoded 32 words with 97.4% confidence (Telugu dialect).',
+        details: 'Gemini listened directly to citizen voice audio in Telugu (తెలుగు). Transcribed 32 words verbatim with audio sentiment & risk comprehension.',
         timestamp: '10:15:45',
       },
       {
@@ -516,11 +575,11 @@ export const INITIAL_VOICE_SESSIONS: VoiceCallSession[] = [
       {
         stepName: '6. Formal Grievance Letter & Dispatch Ready',
         status: 'completed',
-        details: 'Statutory complaint letter generated in Telugu, Hindi & English. Ticket NGV-00043 reserved.',
+        details: 'Statutory complaint letter drafted from audio in Telugu & English. Ticket NGV-00043 reserved.',
         timestamp: '10:16:04',
       },
     ],
-    generatedComplaint: `స్వీకర్త:\nExecutive Engineer (Road Infrastructure)\nGHMC Zonal Office, Khairatabad, Hyderabad\n\nవిషయం: తక్షణ పరిశీలన మరియు నివారణ చర్యల కొరకు అధికారిక విన్నపం — రోడ్డు గుంతలు / పాడైన రహదారి (ఖైరతాబాద్ మెట్రో పిల్లర్ 98)\n\nగౌరవనీయులైన అధికారి గారికి,\n04041895372 నగరవాణి వాయిస్ హెల్ప్‌లైన్ ద్వారా పౌరుడు ఫోన్ చేసి తెలిపిన వివరాల ప్రకారం, ఖైరతాబాద్ మెట్రో పిల్లర్ 98 వద్ద రహదారిపై ప్రమాదకర గుంత ఏర్పడి ద్విచక్ర వాహనదారులకు ప్రమాదకరంగా మారింది. తక్షణమే మరమ్మతులు చేపట్టవలసిందిగా కోరుతున్నాము.`,
+    generatedComplaint: `స్వీకర్త:\nExecutive Engineer (Road Infrastructure)\nGHMC Zonal Office, Khairatabad, Hyderabad\n\nవిషయం: తక్షణ పరిశీలన మరియు నివారణ చర్యల కొరకు అధికారిక విన్నపం — రోడ్డు గుంతలు / పాడైన రహదారి (ఖైరతాబాద్ మెట్రో పిల్లర్ 98)\n\nగౌరవనీయులైన అధికారి గారికి,\n04041895372 నగరవాణి వాయిస్ హెల్ప్‌లైన్ ద్వారా పౌరుడు ఫోన్ చేసి తెలిపిన వివరాల ప్రకారం, ఖైరతాబాద్ మెట్రో పిల్లర్ 98 వద్ద రహదారిపై ప్రమాదకర గుంత ఏర్పడి ద్విచక్ర వాహనదారులకు ప్రమాదకరంగా మారింది. తక్షణమే మరమ్మతులు చేపట్టవలసిందిగా కోరుతున్నాము.\n\nCitizen Spoken Grievance (Original Telephony Audio):\n"నమస్కారం అండి, ఖైరతాబాద్ మెట్రో పిల్లర్ 98 దగ్గర రోడ్డుపై భారీ గుంత పడింది. రాత్రి పూట బైకర్లు పడిపోతున్నారు. త్వరగా రిపేర్ చేయించండి."\n\nEnglish Translation of Audio:\n"Hello sir, near Khairatabad metro pillar 98 there is a massive pothole on the road. At night two-wheeler riders are falling down. Please get it repaired immediately."`,
   },
   {
     callSid: 'call-exotel-9942',
@@ -532,7 +591,12 @@ export const INITIAL_VOICE_SESSIONS: VoiceCallSession[] = [
     selectedLanguage: 'hi',
     languageInputMethod: 'DTMF_2_HI',
     liveTranscript: 'हेलो, बेगमपेट में सरकारी स्कूल के पास स्ट्रीट लाइट का खंभा झुक गया है और नंगी तार लटक रही है। रात में बहुत अंधेरा रहता है और करंट लगने का खतरा है।',
+    englishTranslation: 'Hello, near the government school in Begumpet, a streetlight pole has tilted and bare live wires are hanging. It is pitch dark at night with electrocution danger.',
     ticketNumber: 'NGV-00044',
+    audioBase64: SAMPLE_AUDIO_HINDI,
+    recordingUrl: 'https://api.exotel.com/v1/Accounts/nagaravaani/Recordings/rec_9942_hindi_begumpet.wav',
+    audioListenedByGemini: true,
+    citizenUrgencyNotes: 'Caller warned of severe electrocution hazard for school students passing nearby.',
     streamIntegrationStatus: 'STREAM_PENDING_EXOTEL_CONFIG',
     pipelineSteps: [
       {
@@ -548,9 +612,9 @@ export const INITIAL_VOICE_SESSIONS: VoiceCallSession[] = [
         timestamp: '11:02:06',
       },
       {
-        stepName: '3. Speech-to-Text Transcription',
+        stepName: '3. Gemini 3.8 Flash Audio Listening & Telephony ASR',
         status: 'completed',
-        details: 'ASR transcribed Hindi audio with 98.1% accuracy.',
+        details: 'Gemini listened directly to citizen voice audio in Hindi (हिन्दी). Transcribed 34 words verbatim and extracted live electric hazard.',
         timestamp: '11:02:35',
       },
       {
@@ -572,7 +636,7 @@ export const INITIAL_VOICE_SESSIONS: VoiceCallSession[] = [
         timestamp: '11:02:50',
       },
     ],
-    generatedComplaint: `सेवा में:\nकार्यकारी अभियंता (विद्युत एवं प्रकाश व्यवस्था)\nग्रेटर हैदराबाद नगर निगम (GHMC)\n\nविषय: तत्काल निरीक्षण एवं निवारण हेतु औपचारिक अनुरोध — बंद / खराब स्ट्रीट लाइट (सरकारी स्कूल, बेगमपेट)\n\nआदरणीय महोदय,\n04041895372 वॉयस हेल्पलाइन पर दर्ज नागरिक शिकायत के अनुसार, बेगमपेट सरकारी स्कूल के पास स्ट्रीट लाइट का खंभा क्षतिग्रस्त है तथा खुली तारें लटक रही हैं, जिससे दुर्घटना की भारी आशंका है। कृपया तत्काल संज्ञान लें।`,
+    generatedComplaint: `सेवा में:\nकार्यकारी अभियंता (विद्युत एवं प्रकाश व्यवस्था)\nग्रेटर हैदराबाद नगर निगम (GHMC)\n\nविषय: तत्काल निरीक्षण एवं निवारण हेतु औपचारिक अनुरोध — बंद / खराब स्ट्रीट लाइट (सरकारी स्कूल, बेगमपेट)\n\nआदरणीय महोदय,\n04041895372 वॉयस हेल्पलाइन पर दर्ज नागरिक शिकायत के अनुसार, बेगमपेट सरकारी स्कूल के पास स्ट्रीट लाइट का खंभा क्षतिग्रस्त है तथा खुली तारें लटक रही हैं, जिससे दुर्घटना की भारी आशंका है। कृपया तत्काल संज्ञान लें।\n\nCitizen Spoken Grievance (Original Telephony Audio):\n"हेलो, बेगमपेट में सरकारी स्कूल के पास स्ट्रीट लाइट का खंभा झुक गया है और नंगी तार लटक रही है। रात में बहुत अंधेरा रहता है और करंट लगने का खतरा है।"\n\nEnglish Translation of Audio:\n"Hello, near the government school in Begumpet, a streetlight pole has tilted and bare live wires are hanging. It is pitch dark at night with electrocution danger."`,
   },
 ];
 
@@ -585,7 +649,11 @@ export const SAMPLE_VOICE_CALLS = [
     langName: 'Telugu (తెలుగు)',
     callerMasked: '+91 98480 *****',
     transcript: 'మా కాలనీలో మలక్‌పేట్ బ్రిడ్జి కింద డ్రైనేజీ పైపు పగిలి మురుగునీరు రోడ్డుపైకి వస్తోంది. తీవ్రమైన దుర్వాసన మరియు రాకపోకలు ఆగిపోయాయి.',
+    englishTranslation: 'In our colony under Malakpet bridge, the drainage pipe has burst and sewage water is overflowing onto the road. There is severe foul smell and vehicular traffic is blocked.',
     locationHint: 'Malakpet Railway Bridge Road, Hyderabad',
+    durationSeconds: 104,
+    audioBase64: SAMPLE_AUDIO_TELUGU,
+    recordingUrl: 'https://api.exotel.com/v1/Accounts/nagaravaani/Recordings/sample_telugu_malakpet.wav',
   },
   {
     id: 'sample-call-hi',
@@ -594,7 +662,11 @@ export const SAMPLE_VOICE_CALLS = [
     langName: 'Hindi (हिन्दी)',
     callerMasked: '+91 94401 *****',
     transcript: 'नमस्ते, अमीरपेट मेन रोड पर मेट्रो पिलर के पास बहुत बड़ा गड्ढा हो गया है। आज सुबह दो स्कूटर वाले गिरते-गिरते बचे हैं। तुरंत मरम्मत करवाएं।',
+    englishTranslation: 'Hello, on Ameerpet Main Road near the metro pillar, there is a very large pothole. This morning two scooter riders narrowly escaped severe accidents. Please repair it immediately.',
     locationHint: 'Ameerpet Main Road near Metro Station, Hyderabad',
+    durationSeconds: 82,
+    audioBase64: SAMPLE_AUDIO_HINDI,
+    recordingUrl: 'https://api.exotel.com/v1/Accounts/nagaravaani/Recordings/sample_hindi_ameerpet.wav',
   },
   {
     id: 'sample-call-en',
@@ -603,7 +675,11 @@ export const SAMPLE_VOICE_CALLS = [
     langName: 'English',
     callerMasked: '+91 99890 *****',
     transcript: 'Hello, there is an open manhole cover right next to the walkway on Sardar Patel Road, Begumpet. It is extremely hazardous for pedestrians at night.',
+    englishTranslation: 'Hello, there is an open manhole cover right next to the walkway on Sardar Patel Road, Begumpet. It is extremely hazardous for pedestrians at night.',
     locationHint: 'Sardar Patel Road, Begumpet, Hyderabad',
+    durationSeconds: 76,
+    audioBase64: SAMPLE_AUDIO_ENGLISH,
+    recordingUrl: 'https://api.exotel.com/v1/Accounts/nagaravaani/Recordings/sample_english_begumpet.wav',
   },
 ];
 

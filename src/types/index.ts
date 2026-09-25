@@ -218,18 +218,52 @@ export interface VoiceCallSession {
   generatedComplaint?: string;
   ticketNumber?: string;
   reportId?: string;
+  recordingUrl?: string;
+  audioBase64?: string;
+  audioListenedByGemini?: boolean;
+  englishTranslation?: string;
+  citizenUrgencyNotes?: string;
+  source?: 'EXOTEL_WEBHOOK' | 'EXOTEL_REST_API' | 'SIMULATION';
   streamIntegrationStatus: 'STREAM_PENDING_EXOTEL_CONFIG' | 'STREAM_ACTIVE';
   pipelineSteps: VoicePipelineStep[];
 }
 
 // -------------------------------------------------------------
-// COMMUNITY ESCALATION & SOCIAL AMPLIFICATION
+// COMMUNITY ESCALATION & SOCIAL / MEDIA AMPLIFICATION
 // -------------------------------------------------------------
 export interface SocialPostDraft {
   xPost: string;
   instagramCaption: string;
   disclaimer: string;
   suggestedHashtags: string[];
+}
+
+export interface PressOutletOption {
+  id: string;
+  name: string;
+  type: 'NEWSPAPER' | 'NEWS_CHANNEL' | 'REGIONAL_DAILY';
+  desk: string;
+  defaultEmail: string;
+  cityCoverage: string;
+  circulationOrReach: string;
+}
+
+export interface PressEmailDraft {
+  outletName: string;
+  editorDesk: string;
+  recipientEmail: string;
+  subject: string;
+  body: string;
+  storyAngle: 'INVESTIGATIVE_PITCH' | 'LETTER_TO_EDITOR' | 'HAZARD_ALERT';
+  keyFacts?: {
+    daysUnaddressed: number;
+    corroboratedReports: number;
+    distinctResidents: number;
+    authorityInvolved: string;
+    location: string;
+    publicImpact: string;
+  };
+  pressReleaseNotice?: string;
 }
 
 export interface CommunityEscalationCluster {
@@ -249,8 +283,9 @@ export interface CommunityEscalationCluster {
   severityReasons: string[];
   officialStatus: ReportLifecycleStatus;
   escalationStatus: 'MONITORING' | 'ESCALATED' | 'SOCIAL_AMPLIFIED';
-  amplifiedPlatforms: ('X' | 'INSTAGRAM')[];
+  amplifiedPlatforms: ('X' | 'INSTAGRAM' | 'PRESS_EMAIL')[];
   socialPostDraft?: SocialPostDraft;
+  pressEmailDraft?: PressEmailDraft;
   lastAmplifiedAt?: string;
   isPersistent: boolean; // >= 7 days active, >= 2 distinct users, not resolved
 }

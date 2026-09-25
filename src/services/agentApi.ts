@@ -9,6 +9,8 @@ import {
   VoiceCallSession,
   CommunityEscalationCluster,
   SocialPostDraft,
+  PressOutletOption,
+  PressEmailDraft,
   ReferralStats,
   ReferralRecord,
 } from '../types';
@@ -177,8 +179,16 @@ export async function fetchExotelConfig(): Promise<{
   exotelNumber: string;
   streamIntegrationStatus: 'STREAM_PENDING_EXOTEL_CONFIG' | 'STREAM_ACTIVE';
   hasServerStreamingUrl: boolean;
+  webhookUrl: string;
+  passthruUrl: string;
+  statusCallbackUrl: string;
+  incomingCallUrl: string;
+  isConfiguredWithExotelApi: boolean;
+  exotelAccountSidMasked: string | null;
+  exotelSubdomain: string;
   supportedLanguages: { code: string; dtmf: string; name: string }[];
   ivrWelcomePrompt: string;
+  totalSessions: number;
 }> {
   const res = await fetch('/api/exotel/config');
   if (!res.ok) throw new Error('Failed to fetch Exotel config');
@@ -195,8 +205,11 @@ export async function processVoiceCall(payload: {
   callerNumberMasked?: string;
   language?: Language;
   languageInputMethod?: 'DTMF_1_EN' | 'DTMF_2_HI' | 'DTMF_3_TE' | 'VOICE_PROMPT';
-  transcript: string;
+  transcript?: string;
   locationHint?: string;
+  recordingUrl?: string;
+  audioBase64?: string;
+  mimeType?: string;
 }): Promise<{ session: VoiceCallSession; report: CivicReport }> {
   const res = await fetch('/api/exotel/process-call', {
     method: 'POST',
@@ -206,6 +219,94 @@ export async function processVoiceCall(payload: {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || 'Failed to process voice call');
+  }
+  return res.json();
+}
+
+export async function analyzeExotelAudio(payload: {
+  audioBase64?: string;
+  audioUrl?: string;
+  mimeType?: string;
+  callerNumber?: string;
+  language?: string;
+  locationHint?: string;
+  duration?: number;
+}): Promise<{ session: VoiceCallSession; report: CivicReport; audioListened: boolean }> {
+  const res = await fetch('/api/exotel/analyze-audio', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to analyze audio');
+  }
+  return res.json();
+}
+
+export async function syncExotelDatabase(credentials?: {
+  accountSid?: string;
+  apiKey?: string;
+  apiToken?: string;
+  subdomain?: string;
+}): Promise<{
+  success: boolean;
+  needsCredentials?: boolean;
+  message: string;
+  addedCount?: number;
+  totalCalls: number;
+  calls: VoiceCallSession[];
+}> {
+  const res = await fetch('/api/exotel/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(credentials || {}),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to sync with Exotel database');
+  }
+  return data;
+}
+
+export async function configureExotelCredentials(credentials: {
+  accountSid?: string;
+  apiKey?: string;
+  apiToken?: string;
+  subdomain?: string;
+}): Promise<{
+  success: boolean;
+  message: string;
+  isConfigured: boolean;
+  accountSidMasked: string | null;
+  subdomain: string;
+}> {
+  const res = await fetch('/api/exotel/credentials', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(credentials),
+  });
+  if (!res.ok) throw new Error('Failed to update Exotel credentials');
+  return res.json();
+}
+
+export async function ingestExotelCall(payload: {
+  callSid?: string;
+  from?: string;
+  digits?: string;
+  recordingUrl?: string;
+  transcript?: string;
+  duration?: number;
+  locationHint?: string;
+}): Promise<{ session: VoiceCallSession; report: CivicReport }> {
+  const res = await fetch('/api/exotel/ingest-call', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to ingest call');
   }
   return res.json();
 }
@@ -240,9 +341,40 @@ export async function generateEscalationPost(payload: {
   return res.json();
 }
 
+export async function fetchPressOutlets(): Promise<{ outlets: PressOutletOption[]; total: number }> {
+  const res = await fetch('/api/escalation/press-outlets');
+  if (!res.ok) throw new Error('Failed to fetch press outlets');
+  return res.json();
+}
+
+export async function generatePressEmail(payload: {
+  communityIssueId: string;
+  category: string;
+  approximateLocation: string;
+  totalReportCount: number;
+  distinctReporterCount: number;
+  daysActive: number;
+  aiSeverity: string;
+  severityReasons: string[];
+  authorityName: string;
+  outletId?: string;
+  customOutletName?: string;
+  customEditorEmail?: string;
+  storyAngle?: 'INVESTIGATIVE_PITCH' | 'LETTER_TO_EDITOR' | 'HAZARD_ALERT';
+  useAi?: boolean;
+}): Promise<PressEmailDraft> {
+  const res = await fetch('/api/escalation/generate-press-email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to generate press email draft');
+  return res.json();
+}
+
 export async function recordEscalationAmplification(payload: {
   communityIssueId: string;
-  platform: 'X' | 'INSTAGRAM';
+  platform: 'X' | 'INSTAGRAM' | 'PRESS_EMAIL';
 }): Promise<{ success: boolean; message: string }> {
   const res = await fetch('/api/escalation/record-amplification', {
     method: 'POST',
