@@ -266,12 +266,22 @@ export interface PressEmailDraft {
   pressReleaseNotice?: string;
 }
 
+export interface DailyContinuousReportEntry {
+  dayNumber: number;
+  date: string;
+  reporterName: string;
+  ticketNumber: string;
+  summary: string;
+  severity: SeverityLevel;
+}
+
 export interface CommunityEscalationCluster {
   communityIssueId: string;
   category: IssueCategory;
   approximateLocation: string;
   ward: string;
   city: string;
+  authorityName?: string;
   reportIds: string[];
   distinctReporters: string[];
   distinctReporterCount: number;
@@ -279,10 +289,13 @@ export interface CommunityEscalationCluster {
   firstReportedAt: string;
   lastReportedAt: string;
   daysActive: number;
+  continuousDaysReported?: number;
+  dailyReportLog?: DailyContinuousReportEntry[];
+  qualifiesForPressEscalation?: boolean; // High/Critical priority + 1 location + 7+ continuous days by different people
   aiSeverity: SeverityLevel;
   severityReasons: string[];
   officialStatus: ReportLifecycleStatus;
-  escalationStatus: 'MONITORING' | 'ESCALATED' | 'SOCIAL_AMPLIFIED';
+  escalationStatus: 'MONITORING' | 'ESCALATED' | 'SOCIAL_AMPLIFIED' | 'PRESS_ESCALATED';
   amplifiedPlatforms: ('X' | 'INSTAGRAM' | 'PRESS_EMAIL')[];
   socialPostDraft?: SocialPostDraft;
   pressEmailDraft?: PressEmailDraft;

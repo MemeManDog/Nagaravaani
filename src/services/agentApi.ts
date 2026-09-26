@@ -203,9 +203,11 @@ export async function fetchVoiceCalls(): Promise<{ calls: VoiceCallSession[]; to
 
 export async function processVoiceCall(payload: {
   callerNumberMasked?: string;
+  citizenName?: string;
   language?: Language;
   languageInputMethod?: 'DTMF_1_EN' | 'DTMF_2_HI' | 'DTMF_3_TE' | 'VOICE_PROMPT';
   transcript?: string;
+  englishTranslation?: string;
   locationHint?: string;
   recordingUrl?: string;
   audioBase64?: string;
@@ -228,7 +230,10 @@ export async function analyzeExotelAudio(payload: {
   audioUrl?: string;
   mimeType?: string;
   callerNumber?: string;
+  citizenName?: string;
   language?: string;
+  transcript?: string;
+  englishTranslation?: string;
   locationHint?: string;
   duration?: number;
 }): Promise<{ session: VoiceCallSession; report: CivicReport; audioListened: boolean }> {

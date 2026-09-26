@@ -20,6 +20,7 @@ export default function App() {
   const { isDark } = useTheme();
   const [currentLang, setCurrentLang] = useState<Language>('en');
   const [activeTab, setActiveTab] = useState<NavTab>('report');
+  const [highlightedTicket, setHighlightedTicket] = useState<string | null>(null);
   
   // Modals state
   const [isSupportModalOpen, setIsSupportModalOpen] = useState<boolean>(false);
@@ -153,6 +154,7 @@ export default function App() {
             reports={reports}
             userPoints={userPoints}
             userName={userName}
+            highlightedTicket={highlightedTicket}
             onRefreshReports={loadData}
             onNewReportClick={() => setActiveTab('report')}
           />
@@ -163,7 +165,10 @@ export default function App() {
           <LiveVoiceDashboard
             currentLang={currentLang}
             onRefreshAllData={loadData}
-            onViewReportDetails={() => setActiveTab('dashboard')}
+            onViewReportDetails={(ticketNumber) => {
+              setHighlightedTicket(ticketNumber || null);
+              setActiveTab('dashboard');
+            }}
           />
         )}
 
@@ -180,6 +185,7 @@ export default function App() {
             currentLang={currentLang}
             reports={reports}
             onSelectReport={(report) => {
+              setHighlightedTicket(report.ticketNumber);
               setActiveTab('dashboard');
             }}
           />

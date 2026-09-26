@@ -145,7 +145,7 @@ export const ReportWizard: React.FC<ReportWizardProps> = ({
 
   const toggleSpeech = () => {
     if (!recognitionRef.current) {
-      alert(t.speechUnsupported);
+      setSpeechError(t.speechUnsupported);
       return;
     }
 
@@ -216,7 +216,7 @@ export const ReportWizard: React.FC<ReportWizardProps> = ({
   // Step 4 Trigger: Run Agentic Pipeline (DOES NOT AWARD POINTS!)
   const handleRunAgent = async () => {
     if (!description.trim()) {
-      alert('Please describe the problem in Step 1 first.');
+      setSpeechError('Please describe the problem in Step 1 first or select a preset.');
       setCurrentStep(1);
       return;
     }
@@ -245,7 +245,7 @@ export const ReportWizard: React.FC<ReportWizardProps> = ({
       setComplaintLang(currentLang);
     } catch (err: any) {
       console.error('Agent analysis failed:', err);
-      alert('Analysis encountered an issue. Re-running with local smart city edge rules.');
+      setSpeechError('Analysis encountered an issue. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -320,7 +320,7 @@ export const ReportWizard: React.FC<ReportWizardProps> = ({
       }
     } catch (error) {
       console.error('Failed to record reporting action:', error);
-      alert('Could not record report in municipal ledger. Please try again.');
+      setSpeechError('Could not record report in municipal ledger. Please try again.');
     } finally {
       setIsRecordingReport(false);
     }
@@ -555,7 +555,7 @@ export const ReportWizard: React.FC<ReportWizardProps> = ({
               type="button"
               onClick={() => {
                 if (!description.trim()) {
-                  alert('Please enter a description or click a sample preset.');
+                  setSpeechError('Please enter a description or click a sample preset below.');
                   return;
                 }
                 setCurrentStep(2);

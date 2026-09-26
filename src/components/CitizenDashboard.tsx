@@ -29,6 +29,7 @@ interface CitizenDashboardProps {
   reports: CivicReport[];
   userPoints: number;
   userName: string;
+  highlightedTicket?: string | null;
   onRefreshReports: () => void;
   onNewReportClick: () => void;
 }
@@ -38,6 +39,7 @@ export const CitizenDashboard: React.FC<CitizenDashboardProps> = ({
   reports,
   userPoints,
   userName,
+  highlightedTicket,
   onRefreshReports,
   onNewReportClick,
 }) => {
@@ -50,6 +52,20 @@ export const CitizenDashboard: React.FC<CitizenDashboardProps> = ({
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
   const [endorsingId, setEndorsingId] = useState<string | null>(null);
   const [simulatingStatusId, setSimulatingStatusId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (highlightedTicket) {
+      const matched = reports.find(
+        (r) => r.ticketNumber === highlightedTicket || r.id === highlightedTicket
+      );
+      if (matched) {
+        setSelectedTab('all');
+        setSelectedStatus('All');
+        setSelectedCategory('All');
+        setActiveReportId(matched.id);
+      }
+    }
+  }, [highlightedTicket, reports]);
 
   const handleEndorse = async (reportId: string, e: React.MouseEvent) => {
     e.stopPropagation();

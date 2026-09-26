@@ -1,6 +1,6 @@
 {
-  "name": "CivicAI",
-  "description": "AI-powered civic issue reporting platform for smart cities. Multilingual voice and photo analysis with automated municipal complaint routing.",
+  "name": "Nagaravaani — Smart City Civic Reporting Platform",
+  "description": "Nagaravaani — AI-powered civic issue reporting platform for smart cities. Multilingual voice and photo analysis with automated municipal complaint routing.",
   "requestFramePermissions": ["geolocation", "microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

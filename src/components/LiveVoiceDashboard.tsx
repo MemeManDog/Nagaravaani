@@ -139,13 +139,19 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
   const [isProcessingAudio, setIsProcessingAudio] = useState<boolean>(false);
   const [processingStatus, setProcessingStatus] = useState<string>('');
   const [customTranscript, setCustomTranscript] = useState<string>('');
+  const [hotlineLocation, setHotlineLocation] = useState<string>('Jubilee Hills Road 36, Hyderabad');
+  const [hotlineLanguage, setHotlineLanguage] = useState<Language>('en');
+  const [hotlineCallerPhone, setHotlineCallerPhone] = useState<string>('+91 98480 12345');
+  const [hotlineCallerName, setHotlineCallerName] = useState<string>('Voice Caller');
   const [simDuration, setSimDuration] = useState<number>(0);
 
-  // Microphone Recording State
+  // Microphone Recording & Live Speech Recognition State
   const [isRecordingMic, setIsRecordingMic] = useState<boolean>(false);
   const [micSeconds, setMicSeconds] = useState<number>(0);
   const [recordedAudioDataUrl, setRecordedAudioDataUrl] = useState<string | null>(null);
+  const [recordedMimeType, setRecordedMimeType] = useState<string>('audio/webm');
   const mediaRecorderRef = useRef<any>(null);
+  const speechRecognitionRef = useRef<any>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
   // Audio Playback Player State
@@ -311,7 +317,10 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
       await loadCalls();
       handleSyncDatabase();
     } catch (err: any) {
-      alert(err.message || 'Failed to save credentials');
+      setSyncFeedback({
+        type: 'error',
+        message: err.message || 'Failed to save credentials',
+      });
     } finally {
       setIsSavingCreds(false);
     }
@@ -341,13 +350,16 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
       });
       if (onRefreshAllData) onRefreshAllData();
     } catch (err: any) {
-      alert(err.message || 'Failed to ingest call');
+      setSyncFeedback({
+        type: 'error',
+        message: err.message || 'Failed to ingest call',
+      });
     } finally {
       setIsIngesting(false);
     }
   };
 
-  // 1. EXECUTE: Listen to Audio & Draft Complaint with Gemini 3.8 Flash
+  // 1. EXECUTE: Listen to Audio & Draft Complaint with Gemini 2.5 Flash
   const handleListenSampleAudioWithGemini = async (presetIdx: number) => {
     const sample = SAMPLE_VOICE_CALLS[presetIdx];
     setIsProcessingAudio(true);
@@ -356,28 +368,30 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
     try {
       setTimeout(() => {
         setProcessingStatus(
-          `2/3 Gemini 3.8 Flash is listening to citizen voice recording (${sample.langName})...`
+          `2/3 Gemini 2.5 Flash is analyzing citizen voice recording (${sample.langName})...`
         );
-      }, 1200);
+      }, 800);
 
-      // Call the backend audio analysis endpoint which passes audio to Gemini
+      // Call the backend audio analysis endpoint with both audio and reference transcript
       const result = await analyzeExotelAudio({
         audioBase64: sample.audioBase64,
         audioUrl: sample.recordingUrl,
         mimeType: 'audio/wav',
         callerNumber: sample.callerMasked,
         language: sample.lang,
+        transcript: sample.transcript,
+        englishTranslation: sample.englishTranslation,
         locationHint: sample.locationHint,
         duration: sample.durationSeconds || 75,
       });
 
-      setProcessingStatus(`3/3 Grievance letter drafted from auditory evidence!`);
+      setProcessingStatus(`3/3 Grievance registered & statutory letter drafted!`);
 
       setSessions((prev) => [result.session, ...prev]);
       setSelectedSession(result.session);
       setSyncFeedback({
         type: 'success',
-        message: `Gemini listened to citizen audio in ${sample.langName}! Statutory complaint draft & ticket ${result.report.ticketNumber} created.`,
+        message: `Registered ${result.report.category} (${result.report.severity} Priority) at ${result.report.location.address}! Ticket ${result.report.ticketNumber} created.`,
       });
       if (onRefreshAllData) onRefreshAllData();
     } catch (err: any) {
@@ -390,14 +404,23 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
           languageInputMethod:
             sample.dtmf === '3' ? 'DTMF_3_TE' : sample.dtmf === '2' ? 'DTMF_2_HI' : 'DTMF_1_EN',
           transcript: sample.transcript,
+          englishTranslation: sample.englishTranslation,
           locationHint: sample.locationHint,
           recordingUrl: sample.recordingUrl,
           audioBase64: sample.audioBase64,
         });
         setSessions((prev) => [fallback.session, ...prev]);
         setSelectedSession(fallback.session);
-      } catch (fbErr) {
-        alert('Failed to process call: ' + err.message);
+        setSyncFeedback({
+          type: 'success',
+          message: `Registered ${fallback.report.category} at ${fallback.report.location.address}! Ticket ${fallback.report.ticketNumber} created.`,
+        });
+        if (onRefreshAllData) onRefreshAllData();
+      } catch (fbErr: any) {
+        setSyncFeedback({
+          type: 'error',
+          message: 'Failed to process call: ' + (fbErr?.message || err.message),
+        });
       }
     } finally {
       setIsProcessingAudio(false);
@@ -405,12 +428,32 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
     }
   };
 
-  // 2. MICROPHONE RECORDING CONTROLS
+  // 2. MICROPHONE RECORDING + LIVE SPEECH RECOGNITION CONTROLS
   const startMicRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
-      const mediaRecorder = new MediaRecorder(stream);
+
+      // Choose supported browser audio MIME type instead of forcing invalid audio/wav
+      const preferredTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+        'audio/ogg;codecs=opus',
+      ];
+      let chosenMime = '';
+      for (const t of preferredTypes) {
+        if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) {
+          chosenMime = t;
+          break;
+        }
+      }
+
+      const mediaRecorder = chosenMime
+        ? new MediaRecorder(stream, { mimeType: chosenMime })
+        : new MediaRecorder(stream);
+      const actualMime = (mediaRecorder.mimeType || chosenMime || 'audio/webm').split(';')[0];
+      setRecordedMimeType(actualMime);
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (event) => {
@@ -420,7 +463,7 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: actualMime });
         const reader = new FileReader();
         reader.onloadend = () => {
           setRecordedAudioDataUrl(reader.result as string);
@@ -431,53 +474,163 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
         stream.getTracks().forEach((track) => track.stop());
       };
 
+      // Also start browser live SpeechRecognition if available so spoken words are captured immediately
+      const SpeechRecognitionAPI =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognitionAPI) {
+        try {
+          const recognition = new SpeechRecognitionAPI();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang =
+            hotlineLanguage === 'te' ? 'te-IN' : hotlineLanguage === 'hi' ? 'hi-IN' : 'en-IN';
+
+          let finalTranscriptAcc = customTranscript ? customTranscript + ' ' : '';
+          recognition.onresult = (event: any) => {
+            let interim = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              const txt = event.results[i][0].transcript;
+              if (event.results[i].isFinal) {
+                finalTranscriptAcc += txt + ' ';
+              } else {
+                interim += txt;
+              }
+            }
+            setCustomTranscript((finalTranscriptAcc + interim).trim());
+          };
+          recognition.onerror = () => {
+            // Ignore speech recognition warnings; MediaRecorder still captures audio
+          };
+          recognition.start();
+          speechRecognitionRef.current = recognition;
+        } catch (srErr) {
+          // SpeechRecognition optional
+        }
+      }
+
       mediaRecorder.start(200);
       setIsRecordingMic(true);
     } catch (err: any) {
-      alert('Microphone access denied or unavailable: ' + err.message);
+      setSyncFeedback({
+        type: 'error',
+        message: 'Microphone access unavailable (' + err.message + '). You can type your grievance below to register via hotline.',
+      });
     }
   };
 
   const stopMicRecording = () => {
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch (e) {
+        // ignore
+      }
+      speechRecognitionRef.current = null;
+    }
     if (mediaRecorderRef.current && isRecordingMic) {
       mediaRecorderRef.current.stop();
       setIsRecordingMic(false);
     }
   };
 
-  // Submit recorded mic audio to Gemini
+  // Submit recorded mic audio and/or spoken transcript to Gemini & Register Hotline Ticket
   const handleSubmitMicAudio = async () => {
-    if (!recordedAudioDataUrl) return;
+    if (!recordedAudioDataUrl && !customTranscript.trim()) {
+      setSyncFeedback({
+        type: 'info',
+        message: 'Please record your voice or enter the spoken grievance problem below before registering.',
+      });
+      return;
+    }
+
+    if (isRecordingMic) {
+      stopMicRecording();
+    }
 
     setIsProcessingAudio(true);
-    setProcessingStatus('Gemini 3.8 Flash is listening to your recorded voice message...');
+    setProcessingStatus('Gemini 2.5 Flash is analyzing your hotline voice report & registering ticket...');
 
     try {
       const result = await analyzeExotelAudio({
-        audioBase64: recordedAudioDataUrl,
-        mimeType: 'audio/wav',
-        callerNumber: '+91 98480 *****',
-        locationHint: 'Hyderabad City Center',
-        duration: micSeconds || 30,
+        audioBase64: recordedAudioDataUrl || undefined,
+        mimeType: recordedMimeType || 'audio/webm',
+        callerNumber: hotlineCallerPhone || '+91 98480 12345',
+        citizenName: hotlineCallerName || 'Voice Caller',
+        language: hotlineLanguage,
+        transcript: customTranscript.trim() || undefined,
+        locationHint: hotlineLocation.trim() || 'Hyderabad',
+        duration: micSeconds || 35,
       });
 
       setSessions((prev) => [result.session, ...prev]);
       setSelectedSession(result.session);
       setRecordedAudioDataUrl(null);
+      setCustomTranscript('');
       setSyncFeedback({
         type: 'success',
-        message: `Gemini listened to your voice audio! Created complaint ticket ${result.report.ticketNumber}.`,
+        message: `Hotline Problem Registered! Ticket ${result.report.ticketNumber} (${result.report.category} • ${result.report.severity} Priority) routed to ${result.report.assignedAuthority.authorityName}.`,
       });
       if (onRefreshAllData) onRefreshAllData();
     } catch (err: any) {
-      alert('Error analyzing voice audio: ' + err.message);
+      setSyncFeedback({
+        type: 'error',
+        message: 'Error registering hotline complaint: ' + err.message,
+      });
     } finally {
       setIsProcessingAudio(false);
       setProcessingStatus('');
     }
   };
 
-  // 3. FILE UPLOAD HANDLER
+  // 3. DIRECT HOTLINE DIAL / TEXT PROBLEM REGISTRATION
+  const handleRegisterDirectHotlineCall = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customTranscript.trim()) {
+      setSyncFeedback({
+        type: 'info',
+        message: 'Please enter or speak the civic problem you want to register on the hotline.',
+      });
+      return;
+    }
+
+    setIsProcessingAudio(true);
+    setProcessingStatus('Registering problem through Exotel Hotline 04041895372 & Nagaravaani AI...');
+
+    try {
+      const result = await processVoiceCall({
+        callerNumberMasked: hotlineCallerPhone || '+91 98480 12345',
+        citizenName: hotlineCallerName || 'Helpline Citizen',
+        language: hotlineLanguage,
+        languageInputMethod:
+          hotlineLanguage === 'te'
+            ? 'DTMF_3_TE'
+            : hotlineLanguage === 'hi'
+            ? 'DTMF_2_HI'
+            : 'DTMF_1_EN',
+        transcript: customTranscript.trim(),
+        locationHint: hotlineLocation.trim() || 'Hyderabad',
+      });
+
+      setSessions((prev) => [result.session, ...prev]);
+      setSelectedSession(result.session);
+      setCustomTranscript('');
+      setSyncFeedback({
+        type: 'success',
+        message: `Hotline Problem Registered! Ticket ${result.report.ticketNumber} (${result.report.category} • ${result.report.severity} Priority) created and added to Citizen Dashboard.`,
+      });
+      if (onRefreshAllData) onRefreshAllData();
+    } catch (err: any) {
+      setSyncFeedback({
+        type: 'error',
+        message: 'Failed to register hotline problem: ' + err.message,
+      });
+    } finally {
+      setIsProcessingAudio(false);
+      setProcessingStatus('');
+    }
+  };
+
+  // 4. FILE UPLOAD HANDLER
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -486,25 +639,31 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
     reader.onload = async () => {
       const base64Data = reader.result as string;
       setIsProcessingAudio(true);
-      setProcessingStatus(`Gemini 3.8 Flash is listening to uploaded audio file (${file.name})...`);
+      setProcessingStatus(`Gemini 2.5 Flash is listening to uploaded audio file (${file.name})...`);
 
       try {
         const result = await analyzeExotelAudio({
           audioBase64: base64Data,
           mimeType: file.type || 'audio/wav',
-          callerNumber: '+91 98480 *****',
-          locationHint: 'Hyderabad Municipal Area',
+          callerNumber: hotlineCallerPhone || '+91 98480 12345',
+          citizenName: hotlineCallerName || 'Voice Caller',
+          language: hotlineLanguage,
+          transcript: customTranscript.trim() || undefined,
+          locationHint: hotlineLocation.trim() || 'Hyderabad Municipal Area',
         });
 
         setSessions((prev) => [result.session, ...prev]);
         setSelectedSession(result.session);
         setSyncFeedback({
           type: 'success',
-          message: `Gemini analyzed audio file ${file.name}! Complaint drafted for ticket ${result.report.ticketNumber}.`,
+          message: `Gemini analyzed audio file ${file.name}! Registered ${result.report.category} for ticket ${result.report.ticketNumber}.`,
         });
         if (onRefreshAllData) onRefreshAllData();
       } catch (err: any) {
-        alert('Error analyzing file: ' + err.message);
+        setSyncFeedback({
+          type: 'error',
+          message: 'Error analyzing file: ' + err.message,
+        });
       } finally {
         setIsProcessingAudio(false);
         setProcessingStatus('');
@@ -1108,6 +1267,51 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
                   >
                     {selectedSession.generatedComplaint}
                   </pre>
+
+                  {/* Action Bar to View Registered Ticket in Dashboard or Dispatch */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                    <div className="flex items-center gap-2 text-xs font-mono text-emerald-400 font-bold">
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      <span>
+                        Ticket {selectedSession.ticketNumber || 'Registered'} saved to Citizen Dashboard
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {selectedSession.analysis?.authority?.email && (
+                        <a
+                          href={`mailto:${encodeURIComponent(
+                            selectedSession.analysis.authority.email
+                          )}?subject=${encodeURIComponent(
+                            `Urgent Helpline Grievance [${selectedSession.ticketNumber}]: ${selectedSession.analysis.classification.category} at ${selectedSession.analysis.locationAnalysis.resolvedAddress}`
+                          )}&body=${encodeURIComponent(selectedSession.generatedComplaint || '')}`}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                            isDark
+                              ? 'bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40'
+                              : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          }`}
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>Email Municipal Officer</span>
+                        </a>
+                      )}
+
+                      {onViewReportDetails && (
+                        <button
+                          type="button"
+                          onClick={() => onViewReportDetails(selectedSession.ticketNumber || '')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                            isDark
+                              ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
+                              : 'bg-slate-900 hover:bg-slate-800 text-white'
+                          }`}
+                        >
+                          <span>View in Citizen Dashboard</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1214,7 +1418,7 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
               <div className="flex items-center gap-2.5">
                 <Headphones className={`w-5 h-5 ${isDark ? 'text-cyan-400' : 'text-emerald-600'} animate-pulse`} />
                 <h3 className="font-heading font-bold text-base">
-                  Listen to Audio & Draft Complaint
+                  Register Problem via Hotline (04041895372)
                 </h3>
               </div>
               <span
@@ -1226,19 +1430,10 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
               </span>
             </div>
 
-            {/* Mode Tabs */}
-            <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-slate-950/60 border border-slate-800 text-[11px] font-mono">
+            {/* Mode Tabs (4 Intake Modes) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 p-1 rounded-xl bg-slate-950/60 border border-slate-800 text-[11px] font-mono">
               <button
-                onClick={() => setIntakeMode('sample_audio')}
-                className={`py-1.5 px-2 rounded-lg font-bold transition-all cursor-pointer ${
-                  intakeMode === 'sample_audio'
-                    ? 'bg-cyan-500 text-slate-950 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                🎧 Exotel Calls
-              </button>
-              <button
+                type="button"
                 onClick={() => setIntakeMode('mic_record')}
                 className={`py-1.5 px-2 rounded-lg font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
                   intakeMode === 'mic_record'
@@ -1250,6 +1445,30 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
                 <span>Speak (Mic)</span>
               </button>
               <button
+                type="button"
+                onClick={() => setIntakeMode('custom_text')}
+                className={`py-1.5 px-2 rounded-lg font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                  intakeMode === 'custom_text'
+                    ? 'bg-cyan-500 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <PhoneCall className="w-3 h-3" />
+                <span>Dial / Type</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIntakeMode('sample_audio')}
+                className={`py-1.5 px-2 rounded-lg font-bold transition-all cursor-pointer ${
+                  intakeMode === 'sample_audio'
+                    ? 'bg-cyan-500 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                🎧 Sample Calls
+              </button>
+              <button
+                type="button"
                 onClick={() => setIntakeMode('upload_file')}
                 className={`py-1.5 px-2 rounded-lg font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
                   intakeMode === 'upload_file'
@@ -1262,11 +1481,98 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
               </button>
             </div>
 
+            {/* SHARED CALLER LANGUAGE & LOCATION CONTEXT BAR (For Mic, Dial/Type, and Upload) */}
+            {intakeMode !== 'sample_audio' && (
+              <div
+                className={`p-3.5 rounded-xl border space-y-3 text-xs ${
+                  isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block font-mono font-bold text-[10px] uppercase text-slate-400 mb-1">
+                      IVR Language (DTMF):
+                    </label>
+                    <select
+                      value={hotlineLanguage}
+                      onChange={(e) => setHotlineLanguage(e.target.value as Language)}
+                      className={`w-full p-2 rounded-lg border font-mono text-xs ${
+                        isDark
+                          ? 'bg-slate-900 border-slate-700 text-slate-100'
+                          : 'bg-white border-slate-300 text-slate-900'
+                      }`}
+                    >
+                      <option value="en">Key [1] — English</option>
+                      <option value="hi">Key [2] — हिन्दी (Hindi)</option>
+                      <option value="te">Key [3] — తెలుగు (Telugu)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-mono font-bold text-[10px] uppercase text-slate-400 mb-1">
+                      Caller Name / Phone:
+                    </label>
+                    <input
+                      type="text"
+                      value={hotlineCallerName}
+                      onChange={(e) => setHotlineCallerName(e.target.value)}
+                      placeholder="e.g. Ayush D. / +91 98480..."
+                      className={`w-full p-2 rounded-lg border text-xs ${
+                        isDark
+                          ? 'bg-slate-900 border-slate-700 text-slate-100'
+                          : 'bg-white border-slate-300 text-slate-900'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-mono font-bold text-[10px] uppercase text-slate-400 mb-1">
+                    Incident Location / Street / Ward Landmark:
+                  </label>
+                  <input
+                    type="text"
+                    value={hotlineLocation}
+                    onChange={(e) => setHotlineLocation(e.target.value)}
+                    placeholder="e.g. Road No 36, Jubilee Hills / Ameerpet Metro / Malakpet Bridge"
+                    className={`w-full p-2 rounded-lg border text-xs ${
+                      isDark
+                        ? 'bg-slate-900 border-slate-700 text-slate-100'
+                        : 'bg-white border-slate-300 text-slate-900'
+                    }`}
+                  />
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {[
+                      'Jubilee Hills Road 36, Hyderabad',
+                      'Ameerpet Metro Station, Hyderabad',
+                      'Malakpet Railway Underbridge, Hyderabad',
+                      'Sardar Patel Road, Begumpet',
+                    ].map((loc) => (
+                      <button
+                        key={loc}
+                        type="button"
+                        onClick={() => setHotlineLocation(loc)}
+                        className={`text-[10px] font-mono px-2 py-0.5 rounded border cursor-pointer transition-colors ${
+                          hotlineLocation === loc
+                            ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
+                            : isDark
+                            ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        {loc.split(',')[0]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* MODE 1: EXOTEL AUDIO PRESETS (LISTEN TO CITIZEN AUDIO) */}
             {intakeMode === 'sample_audio' && (
               <div className="space-y-4">
                 <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Select an authentic citizen call recorded on Exotel trunk <strong>04041895372</strong>. You can play the audio yourself, then have Gemini 3.8 Flash listen and draft the official municipal grievance.
+                  Select an authentic citizen call recorded on Exotel trunk <strong>04041895372</strong>. Play the audio and click below to have <strong>Gemini 2.5 Flash</strong> register the exact complaint ticket and draft the municipal grievance.
                 </p>
 
                 <div className="space-y-2.5">
@@ -1287,7 +1593,7 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="font-bold text-xs flex items-center gap-1.5">
                           <Globe className="w-3.5 h-3.5 text-cyan-400" />
-                          {sample.langName}
+                          {sample.langName} — {sample.locationHint.split(',')[0]}
                         </span>
 
                         <div className="flex items-center gap-2">
@@ -1331,6 +1637,7 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
 
                 {/* Primary Action Button */}
                 <button
+                  type="button"
                   onClick={() => handleListenSampleAudioWithGemini(selectedAudioSampleIdx)}
                   disabled={isProcessingAudio}
                   className={`w-full py-3.5 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
@@ -1344,32 +1651,33 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
                   {isProcessingAudio ? (
                     <>
                       <Activity className="w-4 h-4 animate-spin" />
-                      <span>{processingStatus || `Gemini is listening to audio (${formatSeconds(simDuration)})...`}</span>
+                      <span>{processingStatus || `Registering call (${formatSeconds(simDuration)})...`}</span>
                     </>
                   ) : (
                     <>
                       <Headphones className="w-4 h-4" />
-                      <span>🎧 Listen to Audio & Draft Complaint with Gemini</span>
+                      <span>🎧 Listen to Audio & Register Problem with Gemini</span>
                     </>
                   )}
                 </button>
               </div>
             )}
 
-            {/* MODE 2: MICROPHONE LIVE RECORDING */}
+            {/* MODE 2: MICROPHONE LIVE RECORDING + LIVE ASR TRANSCRIPTION */}
             {intakeMode === 'mic_record' && (
               <div className="space-y-4">
                 <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Speak your complaint into your device microphone in <strong>Telugu, Hindi, or English</strong>. Gemini 3.8 Flash will listen to your recording, transcribe your spoken dialect verbatim, and draft the statutory complaint letter.
+                  Click the microphone to speak your civic problem in <strong>Telugu, Hindi, or English</strong>. Your voice is recorded AND transcribed live below so you can verify or refine the details before registering.
                 </p>
 
                 <div
-                  className={`p-6 rounded-xl border text-center space-y-4 ${
+                  className={`p-5 rounded-xl border text-center space-y-3 ${
                     isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
                   }`}
                 >
                   <div className="flex items-center justify-center">
                     <button
+                      type="button"
                       onClick={isRecordingMic ? stopMicRecording : startMicRecording}
                       className={`w-16 h-16 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-lg ${
                         isRecordingMic
@@ -1386,21 +1694,22 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
                       {isRecordingMic
                         ? `Recording Live Speech: ${formatSeconds(micSeconds)}`
                         : recordedAudioDataUrl
-                        ? 'Voice Message Recorded!'
+                        ? 'Voice Recording Captured!'
                         : 'Click Microphone to Start Speaking'}
                     </span>
                     <span className="text-[11px] text-slate-400">
                       {isRecordingMic
-                        ? 'Describe your civic grievance (pothole, water leak, garbage, wire hazard)...'
+                        ? 'Speak clearly (e.g., "There is a deep pothole and sewage overflow near Ameerpet Metro...")'
                         : recordedAudioDataUrl
-                        ? 'Ready to send audio to Gemini for listening and drafting.'
-                        : 'Speaks Telugu, Hindi, or English'}
+                        ? 'Audio ready! Review or edit spoken text below and click Register.'
+                        : 'Supports English, हिन्दी (Hindi), and తెలుగు (Telugu)'}
                     </span>
                   </div>
 
                   {recordedAudioDataUrl && (
-                    <div className="flex items-center justify-center gap-3 pt-2">
+                    <div className="flex items-center justify-center gap-3 pt-1">
                       <button
+                        type="button"
                         onClick={() => handleTogglePlayAudio(recordedAudioDataUrl, 'mic-recording')}
                         className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer"
                       >
@@ -1409,23 +1718,48 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
                       </button>
 
                       <button
+                        type="button"
                         onClick={() => {
                           setRecordedAudioDataUrl(null);
                           setMicSeconds(0);
                         }}
                         className="px-3 py-1.5 rounded-lg bg-red-950 text-red-300 text-xs font-mono font-bold cursor-pointer"
                       >
-                        Delete
+                        Clear Audio
                       </button>
                     </div>
                   )}
                 </div>
 
+                {/* Live / Editable Spoken Grievance Box so registration NEVER fails even if mic is quiet */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-mono font-bold text-cyan-400">
+                      Live Spoken Transcript / Problem Description (Editable):
+                    </label>
+                    <span className="text-[10px] font-mono text-slate-400">
+                      {customTranscript.length} chars
+                    </span>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={customTranscript}
+                    onChange={(e) => setCustomTranscript(e.target.value)}
+                    placeholder="Your spoken words appear here live as you speak, or you can type/refine your civic complaint directly (e.g., 'Open manhole cover and sewage overflow on Sardar Patel Road, Begumpet causing danger to school children')..."
+                    className={`w-full p-3 rounded-xl border text-xs leading-relaxed focus:outline-none ${
+                      isDark
+                        ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-cyan-400'
+                        : 'bg-white border-slate-300 text-slate-900 focus:border-emerald-600'
+                    }`}
+                  />
+                </div>
+
                 <button
+                  type="button"
                   onClick={handleSubmitMicAudio}
-                  disabled={!recordedAudioDataUrl || isProcessingAudio}
+                  disabled={(!recordedAudioDataUrl && !customTranscript.trim()) || isProcessingAudio}
                   className={`w-full py-3.5 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                    !recordedAudioDataUrl || isProcessingAudio
+                    (!recordedAudioDataUrl && !customTranscript.trim()) || isProcessingAudio
                       ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
                       : isDark
                       ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-[0_0_20px_rgba(6,182,212,0.4)]'
@@ -1435,40 +1769,140 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
                   {isProcessingAudio ? (
                     <>
                       <Activity className="w-4 h-4 animate-spin" />
-                      <span>Gemini is listening to your audio...</span>
+                      <span>{processingStatus || 'Registering hotline complaint...'}</span>
                     </>
                   ) : (
                     <>
                       <Headphones className="w-4 h-4" />
-                      <span>Send My Audio to Gemini & Draft Complaint</span>
+                      <span>📞 Register Problem via Hotline (04041895372)</span>
                     </>
                   )}
                 </button>
               </div>
             )}
 
-            {/* MODE 3: UPLOAD AUDIO FILE */}
+            {/* MODE 3: DIRECT HOTLINE DIAL / TYPE CALL SIMULATOR */}
+            {intakeMode === 'custom_text' && (
+              <form onSubmit={handleRegisterDirectHotlineCall} className="space-y-4">
+                <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Directly simulate or log an inbound call on <strong>04041895372</strong> in English, Hindi, or Telugu. Enter the caller's spoken problem below and click Register to triage and create an official ticket.
+                </p>
+
+                <div className="space-y-1.5">
+                  <label className="block font-mono font-bold text-[11px] uppercase text-cyan-400">
+                    Caller's Spoken Problem / Grievance:
+                  </label>
+                  <textarea
+                    rows={4}
+                    required
+                    value={customTranscript}
+                    onChange={(e) => setCustomTranscript(e.target.value)}
+                    placeholder={
+                      hotlineLanguage === 'te'
+                        ? 'ఉదా: మా కాలనీలో రోడ్డుపై పెద్ద గుంతలు పడ్డాయి మరియు డ్రైనేజీ నీరు పొంగుతోంది...'
+                        : hotlineLanguage === 'hi'
+                        ? 'उदा: हमारे इलाके में स्ट्रीट लाइट खराब है और सीवर का गंदा पानी सड़क पर बह रहा है...'
+                        : 'e.g., Huge pothole and broken streetlight with exposed wires near the school gate causing severe risk at night...'
+                    }
+                    className={`w-full p-3 rounded-xl border text-xs leading-relaxed focus:outline-none ${
+                      isDark
+                        ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-cyan-400'
+                        : 'bg-white border-slate-300 text-slate-900 focus:border-emerald-600'
+                    }`}
+                  />
+
+                  {/* Quick Problem Presets */}
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHotlineLanguage('en');
+                        setHotlineLocation('Road No 36, Jubilee Hills, Hyderabad');
+                        setCustomTranscript(
+                          'Deep crater pothole in the middle of Jubilee Hills Road 36 near Metro Pillar. Two-wheeler riders are skidding and falling at night.'
+                        );
+                      }}
+                      className="text-[10px] font-mono px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 cursor-pointer"
+                    >
+                      + Pothole Hazard (EN)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHotlineLanguage('hi');
+                        setHotlineLocation('Sardar Patel Road, Begumpet, Hyderabad');
+                        setCustomTranscript(
+                          'बेगमपेट सरकारी स्कूल के पास स्ट्रीट लाइट का खंभा झुक गया है और नंगी तार लटक रही है। बच्चों को करंट लगने का गंभीर खतरा है।'
+                        );
+                      }}
+                      className="text-[10px] font-mono px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 cursor-pointer"
+                    >
+                      + Live Wire Hazard (HI)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHotlineLanguage('te');
+                        setHotlineLocation('Malakpet Railway Bridge Road, Hyderabad');
+                        setCustomTranscript(
+                          'మలక్‌పేట్ రైల్వే బ్రిడ్జి కింద డ్రైనేజీ పైపు పగిలి మురుగునీరు రోడ్డుపైకి వస్తోంది. తీవ్రమైన దుర్వాసన మరియు ట్రాఫిక్ జామ్ అవుతోంది.'
+                        );
+                      }}
+                      className="text-[10px] font-mono px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 cursor-pointer"
+                    >
+                      + Sewage Burst (TE)
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isProcessingAudio || !customTranscript.trim()}
+                  className={`w-full py-3.5 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    isProcessingAudio || !customTranscript.trim()
+                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                      : isDark
+                      ? 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-[0_0_20px_rgba(6,182,212,0.4)]'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                  }`}
+                >
+                  {isProcessingAudio ? (
+                    <>
+                      <Activity className="w-4 h-4 animate-spin" />
+                      <span>{processingStatus || 'Registering on Hotline...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <PhoneCall className="w-4 h-4" />
+                      <span>📞 Register Problem on Hotline (04041895372)</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {/* MODE 4: UPLOAD AUDIO FILE */}
             {intakeMode === 'upload_file' && (
               <div className="space-y-4">
                 <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Upload an audio file (<strong>.wav, .mp3, .m4a</strong>) recorded on Exotel or your phone. Gemini will listen to the audio directly, extract the grievance, and draft the statutory complaint letter.
+                  Upload an audio file (<strong>.wav, .mp3, .webm, .m4a, .ogg</strong>) recorded on Exotel or your phone. Gemini 2.5 Flash will listen to the audio, extract the grievance, and register the municipal complaint.
                 </p>
 
                 <label
-                  className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors ${
+                  className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center gap-2.5 cursor-pointer transition-colors ${
                     isDark
                       ? 'border-slate-800 hover:border-cyan-500/50 bg-slate-950/60'
                       : 'border-slate-300 hover:border-emerald-500 bg-slate-50'
                   }`}
                 >
-                  <Upload className="w-8 h-8 text-cyan-400 animate-bounce" />
+                  <Upload className="w-7 h-7 text-cyan-400 animate-bounce" />
                   <div className="text-center">
                     <span className="font-bold text-xs block">Click to browse or drop audio file</span>
-                    <span className="text-[11px] text-slate-500">Supports WAV, MP3, M4A, OGG</span>
+                    <span className="text-[11px] text-slate-500">Supports WAV, MP3, WEBM, M4A, OGG</span>
                   </div>
                   <input
                     type="file"
-                    accept="audio/*"
+                    accept="audio/*,video/webm"
                     onChange={handleFileUpload}
                     className="hidden"
                   />
@@ -1493,10 +1927,10 @@ export const LiveVoiceDashboard: React.FC<LiveVoiceDashboardProps> = ({
             >
               <div className="flex items-center gap-2 font-bold text-slate-200 dark:text-slate-300">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>Authentic Auditory Comprehension Notice</span>
+                <span>Authentic Auditory & Multilingual Triage</span>
               </div>
               <p>
-                Nagaravaani utilizes <strong>Gemini 3.8 Flash</strong> multimodal audio capabilities to directly listen to Telugu, Hindi, and English voice streams. The model detects acoustic sentiment, extracts specific street landmarks, and drafts statutory letters directly from voice audio.
+                Nagaravaani utilizes <strong>Gemini 2.5 Flash</strong> multimodal audio and live speech recognition to process Telugu, Hindi, and English hotline calls, automatically registering tickets into the Citizen Dashboard.
               </p>
             </div>
           </div>
